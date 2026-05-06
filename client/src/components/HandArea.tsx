@@ -44,11 +44,9 @@ function HandArea({ cards, selectedIds, onToggleSelect, disabled = false }: Hand
     if (seenRef.current.has(index)) return
 
     seenRef.current.add(index)
-    // Only select — never deselect during drag
-    if (!selectedIds.has(index)) {
-      onToggleSelect(index)
-    }
-  }, [sorted.length, selectedIds, onToggleSelect, findCardIndex])
+    // Toggle each card encountered during drag — lifts unselected, drops selected
+    onToggleSelect(index)
+  }, [sorted.length, onToggleSelect, findCardIndex])
 
   const handleTouchEnd = useCallback(() => {
     draggingRef.current = false
