@@ -307,37 +307,45 @@ function GameRoom() {
       />
     </div>
 
-    {/* ── Side buttons (portal to body, position:fixed) ── */}
+    {/* ── Side buttons (portal to body, fixed positioning, text rotates in forced landscape) ── */}
     {((phase === 'DECLARATION' && isDeclarationMyTurn && !allDeclared) || phase === 'PLAYING') && createPortal(
       <>
         {phase === 'DECLARATION' && (
           <>
             <div className="action-side action-side--left action-side--decl">
-              <button className="btn-action btn-action--primary" onClick={() => handleDeclare(true)}>
-                是，包牌
-              </button>
+              <div className="action-side__body">
+                <button className="btn-action btn-action--primary" onClick={() => handleDeclare(true)}>
+                  是，包牌
+                </button>
+              </div>
             </div>
             <div className="action-side action-side--right action-side--decl">
-              <button className="btn-action btn-action--pass" onClick={() => handleDeclare(false)}>
-                否，不包
-              </button>
+              <div className="action-side__body">
+                <button className="btn-action btn-action--pass" onClick={() => handleDeclare(false)}>
+                  否，不包
+                </button>
+              </div>
             </div>
           </>
         )}
         {phase === 'PLAYING' && (
           <>
             <div className="action-side action-side--left">
-              <button className="btn-action btn-action--hint" disabled={!isMyTurn} onClick={handleHint}>
-                提示
-              </button>
+              <div className="action-side__body">
+                <button className="btn-action btn-action--hint" disabled={!isMyTurn} onClick={handleHint}>
+                  提示
+                </button>
+              </div>
             </div>
             <div className="action-side action-side--right">
-              <button className="btn-action btn-action--primary" disabled={!canPlay} onClick={handlePlay}>
-                出牌
-              </button>
-              <button className="btn-action btn-action--pass" disabled={!isMyTurn} onClick={handlePass}>
-                不要
-              </button>
+              <div className="action-side__body">
+                <button className="btn-action btn-action--primary" disabled={!canPlay} onClick={handlePlay}>
+                  出牌
+                </button>
+                <button className="btn-action btn-action--pass" disabled={!isMyTurn} onClick={handlePass}>
+                  不要
+                </button>
+              </div>
             </div>
           </>
         )}

@@ -488,56 +488,79 @@ html.force-landscape body {
 }
 
 /* ===================================================================
-   Side-positioned action buttons (portal to body, position:fixed)
-   Desktop: positioned at game-layout edges (centered 480px)
-   Mobile:  positioned at physical screen edges
+   Side action buttons (portal to body, position:fixed)
+   - Desktop (fine pointer): near game-layout edges (calc centered 480px)
+   - Mobile touch native landscape (coarse pointer): phone left/right edges
+   - Forced landscape (.force-landscape): phone top/bottom edges + text rotate(90deg)
+     → physical top/bottom = game right/left in rotated view
    =================================================================== */
 
 .action-side {
   position: fixed;
   z-index: 99999;
+  pointer-events: none;
+}
+
+.action-side__body {
+  pointer-events: auto;
   display: flex;
   flex-direction: column;
   gap: 12px;
 }
 
-.action-side--left {
-  left: calc(50% - 240px + 12px);
-  top: 50%;
-  transform: translateY(-50%);
+/* ── Desktop (fine pointer): snap to game-layout edges ── */
+@media (pointer: fine) {
+  .action-side--left {
+    left: calc(50% - 240px + 10px);
+    top: 50%;
+    transform: translateY(-50%);
+  }
+  .action-side--right {
+    right: calc(50% - 240px + 10px);
+    top: 50%;
+    transform: translateY(-50%);
+  }
 }
 
-.action-side--right {
-  right: calc(50% - 240px + 12px);
-  top: 50%;
-  transform: translateY(-50%);
+/* ── Mobile touch (coarse pointer): phone left/right edges ── */
+@media (pointer: coarse) {
+  .action-side--left {
+    left: 10px;
+    top: 50%;
+    transform: translateY(-50%);
+  }
+  .action-side--right {
+    right: 10px;
+    top: 50%;
+    transform: translateY(-50%);
+  }
 }
 
-/* Declaration buttons sit slightly higher (near opponents area) */
+/* ── Declaration buttons: slightly higher ── */
 .action-side--decl {
-  top: 35%;
+  top: 35% !important;
 }
 
-/* Mobile (force-landscape): snap to physical screen edges */
+/* ── Forced landscape (CSS rotation active) ── */
+/* Map phone top/bottom → game right/left, and rotate text to match game orientation */
 html.force-landscape .action-side--left {
-  left: 12px;
-  right: auto;
+  left: 50% !important;
+  right: auto !important;
+  bottom: 80px !important;
+  top: auto !important;
+  transform: translateX(-50%) !important;
 }
-
 html.force-landscape .action-side--right {
-  right: 12px;
-  left: auto;
+  left: 50% !important;
+  right: auto !important;
+  top: 80px !important;
+  bottom: auto !important;
+  transform: translateX(-50%) !important;
 }
-
-html.force-landscape .action-side--decl {
-  top: 35%;
+/* Rotate button text 90° to align with the rotated landscape game */
+html.force-landscape .action-side__body {
+  transform: rotate(90deg);
 }
-
-/* ===================================================================
-   Force-landscape card size override
-   When rotated, vw units refer to the narrow portrait width, which
-   makes cards too small. Switch to vh (which gives the landscape width).
-   =================================================================== */
 
 html.force-landscape .card--sm {
   width: min(110px, 18vh);
