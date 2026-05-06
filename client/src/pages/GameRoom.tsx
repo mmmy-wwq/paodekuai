@@ -260,11 +260,15 @@ function GameRoom() {
           </span>
         )}
         <div className="game-layout__scores">
-          {players.map((p) => (
-            <span key={p.player_id}>
-              {p.name}: {p.score}
-            </span>
-          ))}
+          {players.map((p) => {
+            const histScore = (gameState.historical_scores as Record<string, number> | undefined)?.[p.name]
+            return (
+              <span key={p.player_id}>
+                {p.name}: {p.score}
+                {histScore !== undefined && <><br /><small style={{ opacity: 0.6 }}>累计 {histScore}</small></>}
+              </span>
+            )
+          })}
         </div>
       </div>
 

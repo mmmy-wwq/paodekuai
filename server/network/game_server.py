@@ -31,6 +31,7 @@ from server.network.protocol import (
     validate_message,
 )
 from server.network.room_manager import RoomManager, _make_rule_config
+from server.network.scores_store import get_all_scores, add_score
 
 
 class GameServer:
@@ -277,6 +278,7 @@ class GameServer:
                 personal_payload["all_ready"] = ready_info["all_ready"]
                 personal_payload["your_hand"] = p.get("hand", [])
                 personal_payload["your_player_id"] = pid
+                personal_payload["historical_scores"] = get_all_scores()
 
                 msg = create_message(MsgType.STATE_SYNC, payload=personal_payload)
                 try:
@@ -304,6 +306,7 @@ class GameServer:
                     "all_ready": ready_info["all_ready"],
                     "your_player_id": pid,
                     "your_hand": [],
+                    "historical_scores": get_all_scores(),
                 }
 
                 msg = create_message(MsgType.STATE_SYNC, payload=payload)
@@ -527,18 +530,28 @@ class GameServer:
 
         # ── If round ended, broadcast ROUND_END ─────────────────────────
         if result.get("phase") == "ROUND_END":
+            score_deltas = result.get("score_deltas", {})
             round_end_msg = create_message(
                 MsgType.ROUND_END,
                 payload={
                     "winner_id": result.get("winner_id"),
                     "scores": result.get("scores"),
-                    "score_deltas": result.get("score_deltas"),
+                    "score_deltas": score_deltas,
                     "is_declaration_game": result.get("is_declaration_game"),
                     "declarer_id": result.get("declarer_id"),
                     "breaker_id": result.get("breaker_id"),
                 },
             )
             await self._broadcast_raw(room_id, serialize_message(round_end_msg))
+
+            # ── Persist historical scores ───────────────────────────────
+            if room and score_deltas:
+                for pid, delta in score_deltas.items():
+                    p_info = room.players.get(pid)
+                    if p_info:
+                        p_name = p_info.get("name", pid)
+                        add_score(p_name, delta)
+                        print(f"[SCORE] {p_name} delta={delta:+d}")
 
     async def _handle_pass(
         self, websocket: WebSocket, player_id: str

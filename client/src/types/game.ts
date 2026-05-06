@@ -64,6 +64,9 @@ export interface GameState {
   /** During DECLARATION: the player_id whose turn it is to choose. */
   declaration_turn_player_id: string | null;
 
+  /** Historical scores keyed by player name (persisted across sessions). */
+  historical_scores?: Record<string, number>;
+
   // ── Personal fields (only in per-player STATE_SYNC) ──────────────
   /** Your own hand cards (only sent to you via _broadcast_individual_hands). */
   your_hand?: Card[];

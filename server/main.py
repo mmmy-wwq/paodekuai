@@ -14,6 +14,7 @@ from starlette.responses import FileResponse, Response
 
 from server.config import CORS_ORIGINS, client_dist_exists, client_dist_path
 from server.network.game_server import GameServer
+from server.network.scores_store import get_all_scores, add_score
 
 CLIENT_DIST = client_dist_path()
 
@@ -56,6 +57,22 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# ── Scores API (preset player historical scores) ──────────────────────────
+
+
+@app.get("/api/scores")
+async def api_get_scores():
+    """Return all historical scores keyed by player name."""
+    return get_all_scores()
+
+
+@app.post("/api/scores/{player_name}")
+async def api_add_score(player_name: str, delta: int = 0):
+    """Add delta to a player's historical score. Used when game round ends."""
+    new_total = add_score(player_name, delta)
+    return {"player_name": player_name, "delta": delta, "total": new_total}
+
 
 # ── WebSocket endpoint (must be before catch-all route) ─────────────────────
 
