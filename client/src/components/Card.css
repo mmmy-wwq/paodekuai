@@ -61,13 +61,15 @@
   color: var(--suit-black, #212121);
 }
 
-/* Selected state */
+/* Selected state — lifts up but keeps same z-index as siblings so
+   the next card (later in DOM) stays accessible above the overlap area */
 .card--selected {
   border-color: var(--card-selected, #ffd700);
   box-shadow: 0 4px 12px rgba(255, 215, 0, 0.45), 0 2px 4px rgba(0, 0, 0, 0.3);
   transform: translateY(-10px);
-  z-index: 10;
-  margin-right: 2px;
+  /* No z-index override — uses base z-index (1), same as siblings.
+     Cards to the right (later in DOM) naturally stack on top,
+     keeping them visible and clickable. */
 }
 
 /* Disabled state */
