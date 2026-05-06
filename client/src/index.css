@@ -143,6 +143,8 @@ input {
   gap: 12px;
   padding: 8px 12px;
   flex-shrink: 0;
+  position: relative;
+  z-index: 60;
 }
 
 /* Action buttons */
@@ -485,46 +487,50 @@ html.force-landscape body {
   height: 100%;
 }
 
-/* ── Hide flex-flow buttons when rotated, show landscape absolute buttons ── */
+/* ===================================================================
+   Side-positioned action buttons (portal to body, position:fixed)
+   Desktop: positioned at game-layout edges (centered 480px)
+   Mobile:  positioned at physical screen edges
+   =================================================================== */
 
-html.force-landscape .game-layout__actions {
-  display: none !important;
-}
-
-.btn-landscape {
-  display: none;
-}
-
-html.force-landscape .btn-landscape {
-  display: block;
-  position: absolute;
-  top: 0; left: 0; right: 0; bottom: 0;
-  pointer-events: none;
-  z-index: 100;
-}
-
-html.force-landscape .btn-landscape__left {
-  /* visual left edge → near logical bottom (local y=380 → visual x=10) */
-  position: absolute;
-  bottom: 10px;
-  left: 50%;
-  transform: translateX(-50%);
-  pointer-events: auto;
+.action-side {
+  position: fixed;
+  z-index: 99999;
   display: flex;
   flex-direction: column;
   gap: 12px;
 }
 
-html.force-landscape .btn-landscape__right {
-  /* visual right edge → near logical top (local y=10 → visual x=380) */
-  position: absolute;
-  top: 10px;
-  left: 50%;
-  transform: translateX(-50%);
-  pointer-events: auto;
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
+.action-side--left {
+  left: calc(50% - 240px + 12px);
+  top: 50%;
+  transform: translateY(-50%);
+}
+
+.action-side--right {
+  right: calc(50% - 240px + 12px);
+  top: 50%;
+  transform: translateY(-50%);
+}
+
+/* Declaration buttons sit slightly higher (near opponents area) */
+.action-side--decl {
+  top: 35%;
+}
+
+/* Mobile (force-landscape): snap to physical screen edges */
+html.force-landscape .action-side--left {
+  left: 12px;
+  right: auto;
+}
+
+html.force-landscape .action-side--right {
+  right: 12px;
+  left: auto;
+}
+
+html.force-landscape .action-side--decl {
+  top: 35%;
 }
 
 /* ===================================================================

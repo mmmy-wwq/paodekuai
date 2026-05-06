@@ -1,4 +1,5 @@
 import { useMemo, useCallback, useState, useEffect } from 'react'
+import { createPortal } from 'react-dom'
 import { useParams, useSearchParams } from 'react-router-dom'
 import type { Card as CardType } from '../types/card'
 import type { GamePhase, PlayerState } from '../types/game'
@@ -244,7 +245,7 @@ function GameRoom() {
   const renderGameShell = (
     playAreaContent: React.ReactNode,
   ) => (
-    <div className="game-layout">
+    <><div className="game-layout">
       {/* Top bar */}
       <div className="game-layout__top-bar">
         <span className="game-layout__room-code">房间 {id ?? '?'}</span>
@@ -297,72 +298,6 @@ function GameRoom() {
         {playAreaContent}
       </div>
 
-      {/* ── Action buttons ────────────────────────────────────────────── */}
-      {/* Desktop (flex flow): buttons between play-area and hand-area */}
-      {(phase === 'PLAYING' || (phase === 'DECLARATION' && isDeclarationMyTurn && !allDeclared)) && (
-        <div className="game-layout__actions">
-          {phase === 'DECLARATION' && (
-            <>
-              <button className="btn-action btn-action--primary" onClick={() => handleDeclare(true)}>
-                是，包牌
-              </button>
-              <button className="btn-action btn-action--pass" onClick={() => handleDeclare(false)}>
-                否，不包
-              </button>
-            </>
-          )}
-          {phase === 'PLAYING' && (
-            <>
-              <button className="btn-action btn-action--hint" disabled={!isMyTurn} onClick={handleHint}>
-                提示
-              </button>
-              <button className="btn-action btn-action--primary" disabled={!canPlay} onClick={handlePlay}>
-                出牌
-              </button>
-              <button className="btn-action btn-action--pass" disabled={!isMyTurn} onClick={handlePass}>
-                不要
-              </button>
-            </>
-          )}
-        </div>
-      )}
-      {/* Mobile landscape (absolute positioned, toggled by .force-landscape CSS) */}
-      {(phase === 'PLAYING' || (phase === 'DECLARATION' && isDeclarationMyTurn && !allDeclared)) && (
-        <div className="btn-landscape">
-          {phase === 'DECLARATION' && (
-            <>
-              <div className="btn-landscape__left">
-                <button className="btn-action btn-action--primary" onClick={() => handleDeclare(true)}>
-                  是，包牌
-                </button>
-              </div>
-              <div className="btn-landscape__right">
-                <button className="btn-action btn-action--pass" onClick={() => handleDeclare(false)}>
-                  否，不包
-                </button>
-              </div>
-            </>
-          )}
-          {phase === 'PLAYING' && (
-            <>
-              <div className="btn-landscape__left">
-                <button className="btn-action btn-action--hint" disabled={!isMyTurn} onClick={handleHint}>
-                  提示
-                </button>
-              </div>
-              <div className="btn-landscape__right">
-                <button className="btn-action btn-action--primary" disabled={!canPlay} onClick={handlePlay}>
-                  出牌
-                </button>
-                <button className="btn-action btn-action--pass" disabled={!isMyTurn} onClick={handlePass}>
-                  不要
-                </button>
-              </div>
-            </>
-          )}
-        </div>
-      )}
-
       {/* Hand area — always rendered, disabled when not your turn */}
       <HandArea
         cards={myHand}
@@ -371,6 +306,45 @@ function GameRoom() {
         disabled={!isMyTurn}
       />
     </div>
+
+    {/* ── Side buttons (portal to body, position:fixed) ── */}
+    {((phase === 'DECLARATION' && isDeclarationMyTurn && !allDeclared) || phase === 'PLAYING') && createPortal(
+      <>
+        {phase === 'DECLARATION' && (
+          <>
+            <div className="action-side action-side--left action-side--decl">
+              <button className="btn-action btn-action--primary" onClick={() => handleDeclare(true)}>
+                是，包牌
+              </button>
+            </div>
+            <div className="action-side action-side--right action-side--decl">
+              <button className="btn-action btn-action--pass" onClick={() => handleDeclare(false)}>
+                否，不包
+              </button>
+            </div>
+          </>
+        )}
+        {phase === 'PLAYING' && (
+          <>
+            <div className="action-side action-side--left">
+              <button className="btn-action btn-action--hint" disabled={!isMyTurn} onClick={handleHint}>
+                提示
+              </button>
+            </div>
+            <div className="action-side action-side--right">
+              <button className="btn-action btn-action--primary" disabled={!canPlay} onClick={handlePlay}>
+                出牌
+              </button>
+              <button className="btn-action btn-action--pass" disabled={!isMyTurn} onClick={handlePass}>
+                不要
+              </button>
+            </div>
+          </>
+        )}
+      </>,
+      document.body
+    )}
+  </>
   )
 
   // =====================================================================
