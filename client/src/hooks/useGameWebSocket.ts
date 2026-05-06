@@ -91,6 +91,20 @@ export function useGameWebSocket(roomId: string, playerName: string, playerCount
 
   // ── Connection management ───────────────────────────────────────────
 
+  /** Retrieve stored PID for this player name, if any. */
+  function getStoredPid(name: string): string {
+    try {
+      return localStorage.getItem(`pdq_pid_${name}`) || ''
+    } catch { return '' }
+  }
+
+  /** Save PID for this player name so they can reconnect. */
+  function saveStoredPid(name: string, pid: string): void {
+    try {
+      localStorage.setItem(`pdq_pid_${name}`, pid)
+    } catch { /* ignore quota errors */ }
+  }
+
   const connect = useCallback(() => {
     if (!mountedRef.current) return;
 
@@ -103,7 +117,9 @@ export function useGameWebSocket(roomId: string, playerName: string, playerCount
       wsRef.current.close();
     }
 
-    const params = new URLSearchParams({ name: playerName, players: String(playerCount) });
+    const storedPid = getStoredPid(playerName)
+    const params = new URLSearchParams({ name: playerName, players: String(playerCount) })
+    if (storedPid) params.append('pid', storedPid)
     const ws = new WebSocket(`${WS_BASE}/ws/${roomId}?${params}`);
     wsRef.current = ws;
 
@@ -128,6 +144,10 @@ export function useGameWebSocket(roomId: string, playerName: string, playerCount
           case MsgType.STATE_SYNC: {
             const gs = msg.payload as GameState;
             console.log('[WS] STATE_SYNC received, phase=', gs.phase, 'your_player_id=', gs.your_player_id)
+            // Store player PID for reconnection
+            if (gs.your_player_id) {
+              saveStoredPid(playerName, gs.your_player_id)
+            }
             dispatch({ type: 'SET_GAME_STATE', payload: gs });
             break;
           }

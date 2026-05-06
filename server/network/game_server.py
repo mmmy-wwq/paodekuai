@@ -112,21 +112,22 @@ class GameServer:
                 await websocket.close()
                 return None
 
-        # ── Clean up stale players (no active WebSocket) before join ─────
+        # ── Generate / reuse player ID (MUST be before stale cleanup) ──
+        if reconnect_id and reconnect_id in room.players:
+            player_id = reconnect_id  # reuse existing ID on reconnect
+            print(f"[CONN] Reconnecting player {player_id[:8]} ({player_name})")
+        else:
+            player_id = str(uuid.uuid4())[:8]
+
+        # ── Clean up stale players (skip the reconnecting player) ────────
         active_sockets = self._room_sockets.get(room_id, {})
         stale_count = 0
         for pid in list(room.players.keys()):
-            if pid not in active_sockets:
+            if pid not in active_sockets and pid != player_id:
                 await self._rm.leave_room(room_id, pid)
                 stale_count += 1
         if stale_count:
             print(f"[CONN] room={room_id} cleaned {stale_count} stale players")
-
-        # ── Generate / reuse player ID ──────────────────────────────────
-        if reconnect_id and reconnect_id in room.players:
-            player_id = reconnect_id  # reuse existing ID on reconnect
-        else:
-            player_id = str(uuid.uuid4())[:8]
 
         # ── Register player in room ─────────────────────────────────────
         joined = await self._rm.join_room(room_id, player_id, player_name)
@@ -528,9 +529,23 @@ class GameServer:
         # ── Success: broadcast new state ────────────────────────────────
         await self.broadcast_state(room_id)
 
-        # ── If round ended, broadcast ROUND_END ─────────────────────────
+        # ── If round ended, broadcast ROUND_END and persist scores ─────
         if result.get("phase") == "ROUND_END":
             score_deltas = result.get("score_deltas", {})
+
+            # Persist historical scores BEFORE re-broadcasting state
+            if room and score_deltas:
+                for pid, delta in score_deltas.items():
+                    p_info = room.players.get(pid)
+                    if p_info:
+                        p_name = p_info.get("name", pid)
+                        add_score(p_name, delta)
+                        print(f"[SCORE] {p_name} delta={delta:+d}")
+
+            # Re-broadcast state with updated historical_scores
+            await self.broadcast_state(room_id)
+
+            # Broadcast ROUND_END message
             round_end_msg = create_message(
                 MsgType.ROUND_END,
                 payload={
@@ -543,15 +558,6 @@ class GameServer:
                 },
             )
             await self._broadcast_raw(room_id, serialize_message(round_end_msg))
-
-            # ── Persist historical scores ───────────────────────────────
-            if room and score_deltas:
-                for pid, delta in score_deltas.items():
-                    p_info = room.players.get(pid)
-                    if p_info:
-                        p_name = p_info.get("name", pid)
-                        add_score(p_name, delta)
-                        print(f"[SCORE] {p_name} delta={delta:+d}")
 
     async def _handle_pass(
         self, websocket: WebSocket, player_id: str
