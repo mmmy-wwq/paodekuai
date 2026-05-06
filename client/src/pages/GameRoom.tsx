@@ -328,27 +328,27 @@ function GameRoom() {
             </div>
           </>
         )}
-        {phase === 'PLAYING' && (
-          <>
-            <div className="action-side action-side--left">
-              <div className="action-side__body">
-                <button className="btn-action btn-action--hint" disabled={!isMyTurn} onClick={handleHint}>
-                  提示
-                </button>
+          {phase === 'PLAYING' && (
+            <>
+              <div className="action-side action-side--left">
+                <div className="action-side__body">
+                  <button className="btn-action btn-action--pass" disabled={!isMyTurn} onClick={handlePass}>
+                    不要
+                  </button>
+                </div>
               </div>
-            </div>
-            <div className="action-side action-side--right">
-              <div className="action-side__body">
-                <button className="btn-action btn-action--primary" disabled={!canPlay} onClick={handlePlay}>
-                  出牌
-                </button>
-                <button className="btn-action btn-action--pass" disabled={!isMyTurn} onClick={handlePass}>
-                  不要
-                </button>
+              <div className="action-side action-side--right">
+                <div className="action-side__body">
+                  <button className="btn-action btn-action--primary" disabled={!canPlay} onClick={handlePlay}>
+                    出牌
+                  </button>
+                  <button className="btn-action btn-action--hint" disabled={!isMyTurn} onClick={handleHint}>
+                    提示
+                  </button>
+                </div>
               </div>
-            </div>
-          </>
-        )}
+            </>
+          )}
       </>,
       document.body
     )}
