@@ -1,0 +1,58 @@
+# 1. 构建前端
+cd D:\个人项目\跑得快\client; npm run build; Copy-Item public\sw.js dist\sw.js -Force
+# 2. 启动后端（从根目录）
+Start-Process powershell -ArgumentList "-NoExit -Command cd D:\个人项目\跑得快; D:\python\python.exe -m uvicorn server.main:app --host 0.0.0.0 --port 8000"
+# 3. 启动 ngrok
+Start-Process powershell -ArgumentList "-NoExit -Command D:\ngrok\ngrok.exe http 8000 --log=stdout"
+1. 打开 PowerShell
+2. 把第一条粘贴进去 → 回车（构建前端）
+3. 把第二条粘贴进去 → 回车（启动后端）
+4. 把第三条粘贴进去 → 回车（启动 ngrok）
+5. 浏览器打开 http://127.0.0.1:4040 看公网地址
+6. 把地址发给家人
+不玩了关掉后端和 ngrok 两个窗口即可。三条命令手动粘贴虽然不 fancy，但保证不会因为编码问题报错。
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+两个启动脚本已创建：
+---
+### 方式一：双击 `start.bat`（推荐）
+最简单的启动方式，双击即可。会依次：
+1. 构建前端 → 2. 启动后端 → 3. 启动 ngrok
+启动后打开浏览器访问 `http://localhost:8000` 本机玩，或去 `http://127.0.0.1:4040` 看公网地址发给家人。
+---
+### 方式二：`start.ps1`（控制台版，功能更全）
+打开 PowerShell 运行：
+cd D:\个人项目\跑得快
+.\start.ps1
+如果提示执行策略错误，先运行：
+Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
+---
+### 完整流程（看完记一次就行）
+电脑重启后想玩跑得快：
+1. 双击 D:\个人项目\跑得快\start.bat
+   （等 ngrok 窗口弹出）
+2. 浏览器打开 http://127.0.0.1:4040 看公网地址
+3. 把地址发给家人，各自选角色进「一家人」房间
+4. 玩完后关掉两个命令行窗口即可

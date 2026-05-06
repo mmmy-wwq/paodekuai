@@ -382,6 +382,12 @@ input {
 
 .ready-btn {
   width: 100%;
+  position: fixed;
+  z-index: 99999;
+  bottom: 160px;
+  left: 50%;
+  transform: translateX(-50%);
+  max-width: 280px;
 }
 
 /* ===================================================================
@@ -580,10 +586,17 @@ html.force-landscape .action-side__body {
 }
 
 html.force-landscape .card--sm {
-  width: min(110px, 18vh);
-  height: min(155px, 26vh);
-  font-size: max(18px, min(28px, 6vh));
-  margin-right: calc(-1 * min(60px, 12vh));
-  min-width: 60px;
-  min-height: 84px;
+  width: min(90px, 15vh);
+  height: min(126px, 21vh);
+  margin-right: calc(-1 * min(50px, 10vh));
+  min-width: 52px;
+  min-height: 72px;
+}
+
+html.force-landscape .card__rank {
+  font-size: max(18px, min(36px, 6vh));
+}
+
+html.force-landscape .card__suit {
+  font-size: max(14px, min(22px, 4vh));
 }

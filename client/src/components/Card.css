@@ -30,14 +30,12 @@
 
 /* Size variants */
 .card--sm {
-  width: min(80px, 14vw);
-  height: min(112px, 20vw);
-  font-size: max(14px, min(20px, 4.2vw));
-  margin-right: calc(-1 * min(52px, 9vw));
-  /* Safety floor for very narrow screens */
-  min-width: 42px;
-  min-height: 60px;
-  padding: 5px 7px;
+  width: min(64px, 11vw);
+  height: min(90px, 16vw);
+  margin-right: calc(-1 * min(40px, 7vw));
+  min-width: 38px;
+  min-height: 54px;
+  padding: 4px 5px;
 }
 
 .card--md {
@@ -78,7 +76,25 @@
   cursor: default;
 }
 
-/* Card content */
+/* Card content — left-aligned vertical (rank above, suit below) */
 .card__content {
   pointer-events: none;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: flex-start;
+  width: 100%;
+  height: 100%;
+  padding: 2px 0 0 3px;
+}
+
+.card__rank {
+  font-size: max(16px, min(22px, 4.2vw));
+  font-weight: 700;
+  line-height: 1.1;
+}
+
+.card__suit {
+  font-size: max(12px, min(16px, 3vw));
+  line-height: 1;
 }

@@ -1,5 +1,5 @@
 import type { Card as CardType } from '../types/card'
-import { Suit, cardToString } from '../types/card'
+import { Suit, RANK_DISPLAY, SUIT_DISPLAY, cardToString } from '../types/card'
 import './Card.css'
 
 interface CardProps {
@@ -42,7 +42,10 @@ function Card({ card, selected = false, onClick, size = 'sm', disabled = false }
       aria-selected={selected}
       aria-disabled={disabled}
     >
-      <span className="card__content">{cardToString(card)}</span>
+      <div className="card__content">
+        <span className="card__rank">{RANK_DISPLAY[card.rank]}</span>
+        <span className="card__suit">{SUIT_DISPLAY[card.suit]}</span>
+      </div>
     </div>
   )
 }
