@@ -4,9 +4,9 @@
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 16px;
-  padding: 16px;
-  min-height: 140px;
+  gap: 8px;
+  padding: 10px;
+  min-height: 100px;
 }
 
 /* Last play section */
@@ -14,11 +14,11 @@
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 8px;
+  gap: 4px;
 }
 
 .played-cards__last--empty {
-  padding: 12px 0;
+  padding: 6px 0;
 }
 
 .played-cards__hint {

@@ -135,6 +135,8 @@ input {
   justify-content: center;
   min-height: 0;
   padding: 0 8px;
+  position: relative;
+  z-index: 55;
 }
 
 /* Action bar (above hand) */
@@ -422,11 +424,11 @@ input {
     font-size: 12px;
   }
 
-  /* Play area: minimal height */
+  /* Play area: centered, minimal padding */
   .game-layout__play-area {
-    padding: 0 4px;
+    padding: 2px 4px;
     min-height: 0;
-    flex: 0 0 auto;
+    flex: 1 1 auto;
   }
 
   /* Action buttons */
@@ -599,4 +601,23 @@ html.force-landscape .card__rank {
 
 html.force-landscape .card__suit {
   font-size: max(14px, min(22px, 4vh));
+}
+
+/* Play area — centered on screen, above top-bar/opponents but below hand area */
+html.force-landscape .game-layout__play-area {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 30;
+  pointer-events: none;
+  padding: 0;
+}
+
+html.force-landscape .game-layout__play-area > * {
+  pointer-events: auto;
 }
