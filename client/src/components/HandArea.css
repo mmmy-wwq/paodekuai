@@ -1,0 +1,39 @@
+/* ===== Hand Area ===== */
+
+.hand-area {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  padding: 4px 8px 12px;
+  background: linear-gradient(to top, rgba(15, 61, 26, 0.95) 60%, rgba(15, 61, 26, 0) 100%);
+  z-index: 50;
+  display: flex;
+  justify-content: center;
+  pointer-events: none;
+}
+
+.hand-area--empty {
+  padding: 12px 8px;
+}
+
+.hand-area__empty-text {
+  color: var(--text-secondary, #d4c5a0);
+  font-size: 14px;
+  opacity: 0.7;
+  pointer-events: auto;
+}
+
+.hand-area__cards {
+  display: flex;
+  flex-direction: row;
+  align-items: flex-end;
+  gap: 0;
+  pointer-events: auto;
+  padding-bottom: 2px;
+}
+
+/* Overlap: when many cards, compress spacing */
+.hand-area__cards .card {
+  flex-shrink: 0;
+}

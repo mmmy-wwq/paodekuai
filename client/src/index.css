@@ -1,0 +1,543 @@
+:root {
+  --bg-table: #1a5c2a;
+  --bg-dark: #0f3d1a;
+  --text-primary: #f5f5dc;
+  --text-secondary: #d4c5a0;
+  --accent-gold: #d4a017;
+  --card-bg: #ffffff;
+  --card-selected: #ffd700;
+  --card-red: #d32f2f;
+  --card-black: #212121;
+  --suit-red: #d32f2f;
+  --suit-black: #212121;
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html, body, #root {
+  height: 100%;
+  width: 100%;
+  overflow: hidden;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  background-color: var(--bg-table);
+  color: var(--text-primary);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  touch-action: manipulation;
+}
+
+a {
+  color: var(--accent-gold);
+  text-decoration: none;
+}
+
+button {
+  cursor: pointer;
+  font-family: inherit;
+}
+
+input {
+  font-family: inherit;
+}
+
+/* ===== Game Layout ===== */
+
+.game-layout {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  width: 100%;
+  max-width: 480px;
+  margin: 0 auto;
+  position: relative;
+}
+
+/* Top bar */
+.game-layout__top-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px;
+  background: linear-gradient(to bottom, rgba(15, 61, 26, 0.95), rgba(15, 61, 26, 0.7));
+  flex-shrink: 0;
+  z-index: 10;
+}
+
+.game-layout__room-code {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--accent-gold);
+  letter-spacing: 0.5px;
+}
+
+.game-layout__round {
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+.game-layout__scores {
+  display: flex;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+/* Opponent areas (middle section) */
+.game-layout__opponents {
+  display: flex;
+  justify-content: center;
+  gap: 40px;
+  padding: 16px 12px;
+  flex-shrink: 0;
+}
+
+.opponent-slot {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+}
+
+.opponent-slot__cards {
+  display: flex;
+  flex-direction: row;
+  gap: 1px;
+}
+
+.opponent-slot__card-back {
+  width: 28px;
+  height: 40px;
+  border-radius: 4px;
+  background: linear-gradient(135deg, #2a6496, #1a3a5c);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+}
+
+.opponent-slot__name {
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+/* Play area (center) */
+.game-layout__play-area {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 0;
+  padding: 0 8px;
+}
+
+/* Action bar (above hand) */
+.game-layout__actions {
+  display: flex;
+  justify-content: center;
+  gap: 12px;
+  padding: 8px 12px;
+  flex-shrink: 0;
+}
+
+/* Action buttons */
+.btn-action {
+  padding: 10px 24px;
+  border-radius: 8px;
+  border: none;
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: 1px;
+  transition: transform 0.1s ease, box-shadow 0.15s ease;
+  touch-action: manipulation;
+}
+
+.btn-action:active {
+  transform: scale(0.96);
+}
+
+.btn-action--primary {
+  background: linear-gradient(to bottom, #43a047, #2e7d32);
+  color: #ffffff;
+  box-shadow: 0 2px 6px rgba(46, 125, 50, 0.5);
+}
+
+.btn-action--primary:hover:not(:disabled) {
+  box-shadow: 0 3px 10px rgba(46, 125, 50, 0.65);
+}
+
+.btn-action--pass {
+  background: rgba(255, 255, 255, 0.1);
+  color: var(--text-primary);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.btn-action--pass:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.18);
+}
+
+.btn-action--hint {
+  background: transparent;
+  color: var(--accent-gold);
+  border: 1px solid var(--accent-gold);
+}
+
+.btn-action--hint:hover:not(:disabled) {
+  background: rgba(212, 160, 23, 0.12);
+}
+
+.btn-action:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+/* ===== Opponent Active State ===== */
+
+.opponent-slot--active .opponent-slot__card-back {
+  border-color: var(--accent-gold);
+  box-shadow: 0 0 8px rgba(212, 160, 23, 0.5);
+}
+
+.opponent-slot--active .opponent-slot__name {
+  color: var(--accent-gold);
+}
+
+/* ===== Phase Labels ===== */
+
+.game-layout__phase--declare {
+  color: var(--accent-gold);
+}
+
+.game-layout__phase--playing {
+  color: var(--text-secondary);
+}
+
+.game-layout__phase--ended {
+  color: var(--accent-gold);
+}
+
+/* ===== Declaration Modal ===== */
+
+.declare-modal {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  padding: 16px;
+}
+
+.declare-modal__box {
+  background: linear-gradient(145deg, rgba(15, 61, 26, 0.95), rgba(26, 92, 42, 0.95));
+  border: 1px solid var(--accent-gold);
+  border-radius: 12px;
+  padding: 28px 24px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+  max-width: 320px;
+  width: 100%;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+}
+
+.declare-modal__title {
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--text-primary);
+  letter-spacing: 1px;
+}
+
+.declare-modal__desc {
+  font-size: 13px;
+  color: var(--text-secondary);
+  text-align: center;
+  line-height: 1.6;
+}
+
+.declare-modal__actions {
+  display: flex;
+  gap: 12px;
+  width: 100%;
+}
+
+.declare-modal__actions .btn-action {
+  flex: 1;
+}
+
+/* ===== Round Result Modal ===== */
+
+.result-modal {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  padding: 16px;
+}
+
+.result-modal__box {
+  background: linear-gradient(145deg, rgba(15, 61, 26, 0.95), rgba(26, 92, 42, 0.95));
+  border: 1px solid var(--accent-gold);
+  border-radius: 12px;
+  padding: 28px 24px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+  max-width: 320px;
+  width: 100%;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+}
+
+.result-modal__title {
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--text-primary);
+  letter-spacing: 1px;
+}
+
+.result-modal__declare-note {
+  font-size: 14px;
+  color: var(--accent-gold);
+  font-weight: 700;
+  text-align: center;
+}
+
+.result-modal__scores {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: 100%;
+}
+
+.result-modal__score-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 12px;
+  background: rgba(255, 255, 255, 0.06);
+  border-radius: 6px;
+}
+
+.result-modal__player-name {
+  font-size: 15px;
+  color: var(--text-primary);
+  font-weight: 600;
+}
+
+.result-modal__score-value {
+  font-size: 18px;
+  font-weight: 700;
+}
+
+.result-modal__score-value--positive {
+  color: #43a047;
+}
+
+.result-modal__score-value--negative {
+  color: var(--suit-red);
+}
+
+.result-modal__next-btn {
+  width: 100%;
+}
+
+/* ===== Ready Status ===== */
+
+.ready-status {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.ready-status__player {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 6px 12px;
+  background: rgba(255, 255, 255, 0.06);
+  border-radius: 6px;
+  font-size: 14px;
+}
+
+.ready-status__player--ready {
+  border-left: 3px solid #43a047;
+}
+
+.ready-status__player--waiting {
+  border-left: 3px solid rgba(255, 255, 255, 0.2);
+}
+
+.ready-btn {
+  width: 100%;
+}
+
+/* ===================================================================
+   Mobile Responsive — landscape optimized, portrait works too
+   =================================================================== */
+
+/* Landscape mobile — larger cards, optimized layout */
+@media (orientation: landscape) and (max-height: 500px) {
+  .game-layout {
+    max-width: 100%;
+  }
+
+  .game-layout__top-bar {
+    padding: 4px 8px;
+  }
+
+  .game-layout__opponents {
+    gap: 16px;
+    padding: 4px 8px;
+  }
+
+  .opponent-slot__cards {
+    display: flex;
+  }
+
+  .opponent-slot__card-back {
+    width: 24px;
+    height: 34px;
+  }
+
+  .opponent-slot__name {
+    font-size: 12px;
+  }
+
+  /* Play area: minimal height */
+  .game-layout__play-area {
+    padding: 0 4px;
+    min-height: 0;
+    flex: 0 0 auto;
+  }
+
+  /* Action buttons */
+  .game-layout__actions {
+    padding: 4px 8px;
+    gap: 8px;
+  }
+
+  .game-layout__actions .btn-action {
+    padding: 8px 16px;
+    font-size: 14px;
+    min-height: 38px;
+    min-width: 56px;
+  }
+}
+
+/* Narrow landscape (older phones ~480px) */
+@media (orientation: landscape) and (max-height: 380px) {
+  .game-layout__top-bar {
+    padding: 2px 6px;
+  }
+
+  .game-layout__opponents {
+    gap: 8px;
+    padding: 2px 6px;
+  }
+
+  .game-layout__actions .btn-action {
+    padding: 6px 10px;
+    font-size: 13px;
+    min-height: 34px;
+  }
+}
+
+/* ===================================================================
+   Force landscape on mobile (touch + portrait)
+   Rotates the entire app 90 degrees so the game appears in landscape
+   even when the phone is held upright.
+   =================================================================== */
+
+html.force-landscape,
+html.force-landscape body {
+  overflow: hidden;
+  margin: 0;
+  padding: 0;
+  width: 100%;
+  height: 100%;
+}
+
+/* The root element becomes a rotated viewport */
+html.force-landscape #root {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vh;   /* viewport height → new content width */
+  height: 100vw;  /* viewport width → new content height */
+  transform-origin: top left;
+  transform: rotate(90deg) translateY(-100vw);
+  overflow: hidden;
+  /* Prevent tap-highlight from leaking in the rotated space */
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Prevent body scrolling when rotated */
+html.force-landscape body {
+  position: fixed;
+  width: 100%;
+  height: 100%;
+}
+
+/* ── Hide flex-flow buttons when rotated, show landscape absolute buttons ── */
+
+html.force-landscape .game-layout__actions {
+  display: none !important;
+}
+
+.btn-landscape {
+  display: none;
+}
+
+html.force-landscape .btn-landscape {
+  display: block;
+  position: absolute;
+  top: 0; left: 0; right: 0; bottom: 0;
+  pointer-events: none;
+  z-index: 100;
+}
+
+html.force-landscape .btn-landscape__left {
+  /* visual left edge → near logical bottom (local y=380 → visual x=10) */
+  position: absolute;
+  bottom: 10px;
+  left: 50%;
+  transform: translateX(-50%);
+  pointer-events: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+html.force-landscape .btn-landscape__right {
+  /* visual right edge → near logical top (local y=10 → visual x=380) */
+  position: absolute;
+  top: 10px;
+  left: 50%;
+  transform: translateX(-50%);
+  pointer-events: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+/* ===================================================================
+   Force-landscape card size override
+   When rotated, vw units refer to the narrow portrait width, which
+   makes cards too small. Switch to vh (which gives the landscape width).
+   =================================================================== */
+
+html.force-landscape .card--sm {
+  width: min(110px, 18vh);
+  height: min(155px, 26vh);
+  font-size: max(18px, min(28px, 6vh));
+  margin-right: calc(-1 * min(60px, 12vh));
+  min-width: 60px;
+  min-height: 84px;
+}

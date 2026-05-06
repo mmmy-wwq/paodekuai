@@ -1,0 +1,71 @@
+/* ===== Played Cards (Table Area) ===== */
+
+.played-cards {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+  padding: 16px;
+  min-height: 140px;
+}
+
+/* Last play section */
+.played-cards__last {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+
+.played-cards__last--empty {
+  padding: 12px 0;
+}
+
+.played-cards__hint {
+  color: var(--text-secondary, #d4c5a0);
+  font-size: 14px;
+  opacity: 0.5;
+}
+
+.played-cards__label {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.played-cards__player {
+  font-weight: 700;
+  font-size: 15px;
+  color: var(--text-primary, #f5f5dc);
+}
+
+.played-cards__pattern {
+  font-size: 13px;
+  color: var(--accent-gold, #d4a017);
+  background: rgba(212, 160, 23, 0.12);
+  padding: 2px 8px;
+  border-radius: 4px;
+}
+
+.played-cards__cards {
+  display: flex;
+  flex-direction: row;
+  align-items: flex-end;
+  justify-content: center;
+  gap: 4px;
+}
+
+/* Current pending play */
+.played-cards__current {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+}
+
+.played-cards__current-label {
+  font-size: 12px;
+  color: var(--text-secondary, #d4c5a0);
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+}
