@@ -48,3 +48,13 @@ docs/
 *.tsbuildinfo
 vite-env.d.ts
 
+# Runtime data (historical scores per player, auto-generated)
+scores.json
+*.log
+
+# Local environment paths (start scripts reference system paths)
+start.bat
+start.ps1
+QUICK_START.txt
+游玩流程.txt
+
