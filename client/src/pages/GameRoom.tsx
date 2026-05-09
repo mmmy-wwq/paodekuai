@@ -4,6 +4,7 @@ import { useParams, useSearchParams } from 'react-router-dom'
 import type { Card as CardType } from '../types/card'
 import type { GamePhase, PlayerState } from '../types/game'
 import { useGameWebSocket } from '../hooks/useGameWebSocket'
+import DealAnimation from '../components/DealAnimation'
 import HandArea from '../components/HandArea'
 import PlayedCards from '../components/PlayedCards'
 
@@ -88,6 +89,7 @@ function GameRoom() {
   const playerCount = parseInt(searchParams.get('players') || '4', 10)
   const [playerName, setPlayerName] = useState(paramName)
   const [readyClicked, setReadyClicked] = useState(false)
+  const [dealAnimDone, setDealAnimDone] = useState(false)
 
   const {
     gameState,
@@ -102,7 +104,7 @@ function GameRoom() {
     dispatch,
   } = useGameWebSocket(id || '', playerName, playerCount)
 
-  // ── Reset ready state when phase resets ────────────────────────────
+  // ── Reset ready & deal animation state on phase changes ───────────
 
   useEffect(() => {
     if (gameState?.phase === 'WAITING' || gameState?.phase === 'ROUND_END') {
@@ -112,9 +114,13 @@ function GameRoom() {
         setReadyClicked(false)
       }
     }
+    // Reset deal animation for new dealing phase
+    if (gameState?.phase === 'DEALING') {
+      setDealAnimDone(false)
+    }
   }, [gameState?.phase])
 
-  // ── Reset ready state when phase resets ────────────────────────────
+  // ── Reset ready state when phase resets (duplicate, kept for safety) ──
 
   useEffect(() => {
     if (gameState?.phase === 'WAITING' || gameState?.phase === 'ROUND_END') {
@@ -133,6 +139,13 @@ function GameRoom() {
   const myHand: CardType[] = gameState?.your_hand || []
   const players: PlayerState[] = gameState?.players || []
   const opponents = players.filter((p) => p.player_id !== myPlayerId)
+
+  // ── Opponent card counts for deal animation ────────────────────────
+  const opponentCardCounts = useMemo(
+    () => opponents.map((p) => p.remaining_cards ?? p.hand?.length ?? 0),
+    [opponents],
+  )
+  const totalDealCards = myHand.length + opponentCardCounts.reduce((a, b) => a + b, 0)
   const isMyTurn = gameState?.current_turn === myPlayerId
   const isDeclarationMyTurn = gameState?.declaration_turn_player_id === myPlayerId
 
@@ -412,7 +425,7 @@ function GameRoom() {
                       padding: '12px 10px',
                       borderRadius: '8px',
                       background: 'rgba(255,255,255,0.08)',
-                      border: `2px solid ${isReady ? '#43a047' : 'rgba(255,255,255,0.2)'}`,
+                      border: `2px solid ${isReady ? 'var(--accent-gold)' : 'rgba(200, 150, 46, 0.2)'}`,
                       textAlign: 'center',
                       fontSize: '14px',
                       color: 'var(--text-primary)',
@@ -422,7 +435,7 @@ function GameRoom() {
                       {seat.player.name} {isMe ? '(你)' : ''}
                     </div>
                     <div style={{
-                      color: isReady ? '#43a047' : 'var(--text-secondary)',
+                      color: isReady ? 'var(--accent-gold-light)' : 'var(--text-secondary)',
                       fontWeight: isReady ? 700 : 400,
                       fontSize: '12px',
                     }}>
@@ -495,13 +508,59 @@ function GameRoom() {
   // =====================================================================
 
   if (phase === 'DEALING') {
-    return renderGameShell(
-      <div className="declare-modal">
-        <div className="declare-modal__box">
-          <h2 className="declare-modal__title">发牌中...</h2>
-          <p className="declare-modal__desc">请稍候，正在发牌</p>
+    return (
+      <div className="game-layout">
+        {/* Top bar */}
+        <div className="game-layout__top-bar">
+          <span className="game-layout__room-code">房间 {id ?? '?'}</span>
+          <span className="game-layout__round">
+            第 {gameState.round_number} 局 · 发牌中
+          </span>
         </div>
-      </div>,
+
+        {/* Opponent areas — show current card backs */}
+        <div className="game-layout__opponents">
+          {opponents.map((p) => {
+            const cardCount = p.remaining_cards ?? p.hand?.length ?? 0
+            return (
+              <div key={p.player_id} className="opponent-slot">
+                <div className="opponent-slot__cards">
+                  {Array.from({ length: Math.min(cardCount, 10) }, (_, i) => (
+                    <div key={i} className="opponent-slot__card-back" />
+                  ))}
+                </div>
+                <span className="opponent-slot__name">{p.name}（{cardCount} 张）</span>
+              </div>
+            )
+          })}
+        </div>
+
+        {/* Play area — DealAnimation overlay during dealing */}
+        <div className="game-layout__play-area" style={{ pointerEvents: 'none' }}>
+          {dealAnimDone ? (
+            <div className="declare-modal">
+              <div className="declare-modal__box">
+                <h2 className="declare-modal__title">发牌完成</h2>
+                <p className="declare-modal__desc">等待游戏开始...</p>
+              </div>
+            </div>
+          ) : (
+            <DealAnimation
+              myCardCount={myHand.length}
+              opponentCounts={opponentCardCounts}
+              currentIndex={0}
+              totalCards={totalDealCards}
+              state="dealing"
+              onDone={() => setDealAnimDone(true)}
+            />
+          )}
+        </div>
+
+        {/* No hand area during dealing — cards are flying to positions */}
+        <div className="hand-area hand-area--empty" style={{ position: 'relative' }}>
+          <p className="hand-area__empty-text">发牌中...</p>
+        </div>
+      </div>
     )
   }
 
@@ -664,7 +723,7 @@ function GameRoom() {
                     {p.name} {isMe ? '(你)' : ''}
                   </span>
                   <span style={{
-                    color: isReady ? '#43a047' : 'var(--text-secondary)',
+                    color: isReady ? 'var(--accent-gold-light)' : 'var(--text-secondary)',
                     fontWeight: isReady ? 700 : 400,
                   }}>
                     {isReady ? '✓ 已准备' : '等待中'}
