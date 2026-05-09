@@ -1,0 +1,100 @@
+/* ── Play Animation Overlay ──────────────────────────────────── */
+.play-anim {
+  position: fixed;
+  inset: 0;
+  z-index: 9998;
+  pointer-events: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* ── Center display ─────────────────────────────────────────── */
+.play-anim__center {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  transition: transform 0.5s cubic-bezier(0.25, 0.46, 0.45, 0.94), opacity 0.5s ease;
+}
+
+/* Entering: start below, slide up */
+.play-anim__center--entering {
+  animation: play-anim-fly-in 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94) forwards;
+}
+
+@keyframes play-anim-fly-in {
+  from {
+    transform: translateY(40vh) scale(0.6);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0) scale(1);
+    opacity: 1;
+  }
+}
+
+/* Shrinking: move to target position */
+.play-anim__center--shrinking {
+  animation: play-anim-shrink 0.5s cubic-bezier(0.55, 0.06, 0.68, 0.19) forwards;
+}
+
+@keyframes play-anim-shrink {
+  from {
+    transform: translate(0, 0) scale(1);
+    opacity: 1;
+  }
+  to {
+    transform: translate(var(--shrink-x, 0), var(--shrink-y, 0)) scale(var(--shrink-scale, 0.35));
+    opacity: 0;
+  }
+}
+
+/* ── Player label ───────────────────────────────────────────── */
+.play-anim__label {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--accent-gold);
+  text-shadow: 0 0 12px rgba(200, 150, 46, 0.4), 0 2px 8px rgba(0, 0, 0, 0.6);
+  letter-spacing: 1px;
+}
+
+/* ── Cards row ──────────────────────────────────────────────── */
+.play-anim__cards {
+  display: flex;
+  flex-direction: row;
+  gap: 4px;
+  justify-content: center;
+}
+
+/* ── Single card ────────────────────────────────────────────── */
+.play-anim__card {
+  width: 52px;
+  height: 72px;
+  border-radius: 5px;
+  background: var(--card-bg);
+  border: 1.5px solid rgba(196, 181, 160, 0.5);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 3px 12px rgba(0, 0, 0, 0.4);
+}
+
+.play-anim__card-rank {
+  font-size: 16px;
+  font-weight: 700;
+  line-height: 1;
+  color: var(--card-black);
+}
+
+.play-anim__card-suit {
+  font-size: 13px;
+  line-height: 1;
+  color: var(--card-black);
+}
+
+.play-anim__card--red .play-anim__card-rank,
+.play-anim__card--red .play-anim__card-suit {
+  color: var(--suit-red);
+}

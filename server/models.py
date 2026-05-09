@@ -90,6 +90,8 @@ class GameState(BaseModel):
     player_count: int
     deck_size: int
     consecutive_passes: int = 0
+    player_last_plays: dict[str, Optional["CardPlay"]] = {}
+    player_last_actions: dict[str, Optional[str]] = {}
 
     model_config = ConfigDict(arbitrary_types_allowed=True)
 

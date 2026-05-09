@@ -16,12 +16,14 @@ Message routing by MsgType:
 
 from __future__ import annotations
 
+import time
 import uuid
 from typing import Any, Dict, Optional
 
 from fastapi import WebSocket
 
 from server.game_engine.state_machine import GameStateManager, InvalidStateError
+from server.game_engine.turn_timer import TurnTimer
 from server.network.protocol import (
     MsgType,
     Message,
@@ -52,6 +54,8 @@ class GameServer:
         self._room_sockets: Dict[str, Dict[str, WebSocket]] = {}
         # Player-id to room-id reverse lookup for disconnect handling
         self._player_room: Dict[str, str] = {}
+        # room_id → TurnTimer for turn timeout
+        self._turn_timers: Dict[str, TurnTimer] = {}
 
     # ── Connection lifecycle ─────────────────────────────────────────────────
 
@@ -280,6 +284,11 @@ class GameServer:
                 personal_payload["your_hand"] = p.get("hand", [])
                 personal_payload["your_player_id"] = pid
                 personal_payload["historical_scores"] = get_all_scores()
+
+                # Turn timer remaining seconds
+                timer = self._turn_timers.get(room_id)
+                if timer and timer.is_running:
+                    personal_payload["remaining_time"] = timer.remaining_seconds()
 
                 msg = create_message(MsgType.STATE_SYNC, payload=personal_payload)
                 try:
@@ -527,6 +536,9 @@ class GameServer:
             return
 
         # ── Success: broadcast new state ────────────────────────────────
+        # Start turn timer BEFORE broadcasting so remaining_time appears
+        if result.get("phase") != "ROUND_END":
+            await self._start_turn_timer(room_id)
         await self.broadcast_state(room_id)
 
         # ── If round ended, broadcast ROUND_END and persist scores ─────
@@ -558,6 +570,9 @@ class GameServer:
                 },
             )
             await self._broadcast_raw(room_id, serialize_message(round_end_msg))
+
+            # Cancel turn timer (round is over)
+            self._cancel_turn_timer(room_id)
 
     async def _handle_pass(
         self, websocket: WebSocket, player_id: str
@@ -596,6 +611,8 @@ class GameServer:
             return
 
         # ── Broadcast new state ─────────────────────────────────────────
+        # Start turn timer BEFORE broadcasting so remaining_time appears
+        await self._start_turn_timer(room_id)
         await self.broadcast_state(room_id)
 
     async def _handle_declare(
@@ -632,6 +649,10 @@ class GameServer:
         # ── Broadcast new state ─────────────────────────────────────────
         print(f"[DECLARE] Broadcasting state after declaration, gsm._phase={gsm._phase.value}")
         await self.broadcast_state(room_id)
+
+        # ── Start turn timer if game entered PLAYING phase ───────────
+        if gsm._phase.value == "PLAYING":
+            await self._start_turn_timer(room_id)
 
     async def _handle_leave(
         self, websocket: WebSocket, player_id: str
@@ -686,6 +707,9 @@ class GameServer:
 
         # Clear ready status for next round
         await self._rm.clear_ready(room_id)
+
+        # Cancel any running turn timer (new game / new round)
+        self._cancel_turn_timer(room_id)
 
         gsm = room.game_state_manager
 
@@ -805,6 +829,69 @@ class GameServer:
                 await ws.send_text(serialize_message(msg))
             except Exception:
                 pass
+
+    # ── Turn timer management ────────────────────────────────────────────────
+
+    async def _start_turn_timer(self, room_id: str) -> None:
+        """Cancel old timer and start a new 30s turn timer for the current player.
+        
+        On timeout: auto-pass or auto-play the smallest card.
+        """
+        # Cancel existing
+        if room_id in self._turn_timers:
+            self._turn_timers[room_id].cancel()
+
+        room = await self._rm.get_room(room_id)
+        if room is None or room.game_state_manager is None:
+            return
+        gsm = room.game_state_manager
+        if gsm._phase.value != "PLAYING":
+            return
+
+        timer = TurnTimer()
+        room_id_captured = room_id
+
+        async def on_timeout():
+            """Auto-play or auto-pass on timeout."""
+            room2 = await self._rm.get_room(room_id_captured)
+            if room2 is None or room2.game_state_manager is None:
+                return
+            gsm2 = room2.game_state_manager
+            state = gsm2.get_state()
+            pid = state.get("current_turn")
+            if not pid:
+                return
+
+            result = gsm2.auto_play(pid)
+            if not result.get("success"):
+                return
+
+            if result.get("phase") == "ROUND_END":
+                # Persist scores
+                sd = result.get("score_deltas", {})
+                if sd:
+                    for pid2, delta in sd.items():
+                        p_info = room2.players.get(pid2)
+                        if p_info:
+                            add_score(p_info.get("name", pid2), delta)
+
+            # Start timer for NEXT turn BEFORE broadcasting,
+            # so remaining_time appears in the state
+            room3 = await self._rm.get_room(room_id_captured)
+            if room3 and room3.game_state_manager and room3.game_state_manager._phase.value == "PLAYING":
+                await self._start_turn_timer(room_id_captured)
+
+            await self.broadcast_state(room_id_captured)
+
+        timer.start(duration_sec=30, on_timeout=on_timeout)
+        self._turn_timers[room_id] = timer
+
+    # ── Turn timer helpers for handlers ────────────────────────────────────
+
+    def _cancel_turn_timer(self, room_id: str) -> None:
+        """Cancel the turn timer for a room."""
+        if room_id in self._turn_timers:
+            self._turn_timers[room_id].cancel()
 
     # ── Diagnostic ────────────────────────────────────────────────────────────
 

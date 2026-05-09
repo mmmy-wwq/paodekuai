@@ -1,0 +1,267 @@
+/* ── Player Slot (positional) ──────────────────────────────── */
+.player-slot {
+  position: absolute;
+  display: flex;
+  gap: 8px;
+  z-index: 20;
+  pointer-events: none;
+  transition: transform 0.3s ease;
+}
+
+/* ── Layout directions: play area faces table center ─────────── */
+.ps-layout--col {
+  flex-direction: column;
+  align-items: center;
+}
+.ps-layout--col-rev {
+  flex-direction: column-reverse;
+  align-items: center;
+}
+.ps-layout--row {
+  flex-direction: row;
+  align-items: center;
+}
+.ps-layout--row-rev {
+  flex-direction: row-reverse;
+  align-items: center;
+}
+
+.player-slot--active .ps-name {
+  color: var(--accent-gold);
+  text-shadow: 0 0 12px rgba(200, 150, 46, 0.5);
+}
+
+/* ── Positions ─────────────────────────────────────────────── */
+.player-slot--me {
+  bottom: 10%;
+  left: 50%;
+  transform: translateX(-50%);
+}
+.player-slot--top {
+  top: 3%;
+  left: 50%;
+  transform: translateX(-50%);
+}
+.player-slot--right {
+  right: 4%;
+  top: 44%;
+  transform: translateY(-50%);
+}
+.player-slot--left {
+  left: 4%;
+  top: 44%;
+  transform: translateY(-50%);
+}
+.player-slot--top-right {
+  top: 5%;
+  right: 14%;
+}
+.player-slot--top-left {
+  top: 5%;
+  left: 14%;
+}
+
+/* ── Header ─────────────────────────────────────────────────── */
+.ps-header {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+}
+
+.ps-name {
+  font-size: 30px;
+  font-weight: 700;
+  color: var(--text-primary);
+  letter-spacing: 0.5px;
+  white-space: nowrap;
+}
+
+.ps-declarer {
+  font-size: 24px;
+}
+
+/* ── Card count: back face with number ──────────────────────── */
+
+.ps-card-back-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 56px;
+  border-radius: 5px;
+  background:
+    radial-gradient(circle at 50% 50%,
+      rgba(200, 150, 46, 0.25) 0px,
+      rgba(200, 150, 46, 0.1) 5px,
+      transparent 7px
+    ),
+    linear-gradient(135deg, #5a1a1a, #3d1111);
+  border: 1.5px solid rgba(200, 150, 46, 0.3);
+  box-shadow: 0 1px 5px rgba(0, 0, 0, 0.5);
+}
+
+.ps-card-back-num {
+  font-size: 26px;
+  font-weight: 800;
+  color: var(--accent-gold-light);
+  text-shadow: 0 0 8px rgba(200, 150, 46, 0.5), 0 1px 3px rgba(0, 0, 0, 0.9);
+  line-height: 1;
+}
+
+.ps-card-count--empty {
+  font-size: 13px;
+  opacity: 0.6;
+  color: var(--accent-gold);
+}
+
+/* ── Per-player play area ───────────────────────────────────── */
+
+.ps-play-area {
+  min-height: 80px;
+  min-width: 100px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 10px 14px;
+  border-radius: 8px;
+  background: rgba(0, 0, 0, 0.25);
+  position: relative;
+}
+
+.ps-play-cards {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+}
+
+.ps-play-pass {
+  font-size: 32px;
+  font-weight: 700;
+  color: var(--text-secondary);
+  opacity: 0.8;
+  text-shadow: 0 1px 6px rgba(0, 0, 0, 0.6);
+}
+
+.ps-play-prompt {
+  font-size: 22px;
+  font-weight: 800;
+  color: var(--accent-gold-light);
+  text-shadow: 0 0 16px rgba(200, 150, 46, 0.6), 0 2px 8px rgba(0, 0, 0, 0.7);
+  animation: ps-prompt-pulse 1.2s ease-in-out infinite;
+}
+
+/* ── Countdown timer ──────────────────────────────────────────── */
+
+.ps-countdown {
+  position: absolute;
+  top: -10px;
+  right: -10px;
+  font-size: 20px;
+  font-weight: 800;
+  color: var(--accent-gold-light);
+  background: rgba(0, 0, 0, 0.75);
+  border: 2px solid var(--accent-gold);
+  border-radius: 50%;
+  width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+  text-shadow: 0 0 8px rgba(200, 150, 46, 0.5);
+  box-shadow: 0 0 12px rgba(200, 150, 46, 0.3);
+}
+
+/* ── Mini card (in play area) — looks like hand card ──────────── */
+
+.ps-mini-card {
+  width: 56px;
+  height: 76px;
+  border-radius: 6px;
+  background: var(--card-bg);
+  border: 1.5px solid rgba(196, 181, 160, 0.5);
+  box-shadow: 0 3px 12px rgba(0, 0, 0, 0.5);
+  flex-shrink: 0;
+  /* Overlap: each subsequent card covers previous one's right side */
+  margin-left: -24px;
+  position: relative;
+  /* Rank above suit, left-aligned */
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  padding: 7px 0 0 8px;
+}
+.ps-mini-card:first-child {
+  margin-left: 0;
+}
+
+.ps-mini-card__rank {
+  font-size: 26px;
+  font-weight: 700;
+  line-height: 1;
+  color: var(--card-black);
+}
+
+.ps-mini-card__suit {
+  font-size: 16px;
+  line-height: 1;
+  margin-top: 3px;
+  color: var(--card-black);
+}
+
+.ps-mini-card--red .ps-mini-card__rank,
+.ps-mini-card--red .ps-mini-card__suit {
+  color: var(--suit-red);
+}
+
+/* ── Forced landscape adjustments ─────────────────────────────── */
+
+html.force-landscape .player-slot--top {
+  top: 2%;
+}
+html.force-landscape .player-slot--me {
+  bottom: 7%;
+}
+html.force-landscape .player-slot--right {
+  right: 2%;
+  top: 40%;
+}
+html.force-landscape .player-slot--left {
+  left: 2%;
+  top: 40%;
+}
+html.force-landscape .ps-name {
+  font-size: 24px;
+}
+html.force-landscape .ps-card-back-icon {
+  width: 30px;
+  height: 42px;
+}
+html.force-landscape .ps-card-back-num {
+  font-size: 18px;
+}
+html.force-landscape .ps-mini-card {
+  width: 40px;
+  height: 54px;
+  margin-left: -16px;
+  padding: 5px 0 0 6px;
+}
+html.force-landscape .ps-mini-card__rank {
+  font-size: 18px;
+}
+html.force-landscape .ps-mini-card__suit {
+  font-size: 12px;
+  margin-top: 2px;
+}
+html.force-landscape .ps-play-area {
+  min-height: 60px;
+  padding: 6px 10px;
+}
+html.force-landscape .ps-countdown {
+  width: 32px;
+  height: 32px;
+  font-size: 16px;
+  top: -8px;
+  right: -8px;
+}

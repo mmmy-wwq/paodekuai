@@ -265,7 +265,8 @@ class RuleEngine:
             return {"triggered": False, "forced_cards": None}
 
         num_players = len(players)
-        next_index = (player_index + 1) % num_players
+        # Counter-clockwise: the next player is at (player_index - 1) % n
+        next_index = (player_index - 1) % num_players
         next_player = players[next_index]
         if next_player.get("remaining_cards", 0) != 1:
             return {"triggered": False, "forced_cards": None}

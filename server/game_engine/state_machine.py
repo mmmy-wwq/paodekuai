@@ -88,6 +88,9 @@ class GameStateManager:
         self._round_history: List[Dict[str, Any]] = []
         self._declarer_id: Optional[str] = None
         self._declaration_turn: int = 0  # whose turn to declare
+        # Per-player last play/action tracking for frontend display
+        self._player_last_plays: Dict[int, Optional[Dict[str, Any]]] = {}
+        self._player_last_actions: Dict[int, Optional[str]] = {}  # 'play' | 'pass'
 
     # ── Phase helpers ──────────────────────────────────────────────
 
@@ -111,7 +114,7 @@ class GameStateManager:
         """
         n = len(self._players)
         for offset in range(1, n + 1):
-            candidate = (start_index + offset) % n
+            candidate = (start_index - offset) % n  # counter-clockwise
             if self._players[candidate]["hand"]:
                 return candidate
         return start_index  # fallback
@@ -219,6 +222,8 @@ class GameStateManager:
         self._last_play_pattern_display = ""
         self._consecutive_passes = 0
         self._turn_number = 0
+        self._player_last_plays = {}
+        self._player_last_actions = {}
         self._declarer_id = None
         self._declaration_turn = self._rule_engine.determine_first_player(
             players=[
@@ -458,6 +463,10 @@ class GameStateManager:
         self._consecutive_passes = 0
         self._turn_number += 1
 
+        # Record per-player last play for frontend display
+        self._player_last_plays[self._current_turn] = self._serialize_last_play()
+        self._player_last_actions[self._current_turn] = 'play'
+
         # ── 7. Declaration break check ─────────────────────────────
         # In declaration (包牌) mode: a non-declarer playing ANY card
         # immediately ends the round — they "break" the declaration.
@@ -545,12 +554,17 @@ class GameStateManager:
         # ── 4. Record pass and advance ──────────────────────────────
         self._consecutive_passes += 1
         self._turn_number += 1
+        # Record per-player pass action
+        self._player_last_actions[self._current_turn] = 'pass'
 
         active_count = self._count_active_players()
         expected_passes = active_count - 1  # all except last_play player
 
         if self._consecutive_passes >= expected_passes and self._last_play_player_index is not None:
             # ── All-passed: last player who played gets free turn ──
+            # Clear all per-player last play records (table reset)
+            self._player_last_plays = {}
+            self._player_last_actions = {}
             free_turn_player = self._last_play_player_index
             self._last_play_cards = None
             self._last_play_player_index = None
@@ -586,6 +600,35 @@ class GameStateManager:
             "consecutive_passes": self._consecutive_passes,
             "message": "Pass accepted.",
         }
+
+    def auto_play(self, player_id: str) -> Dict[str, Any]:
+        """Auto-play on timeout: pass if possible, else play the smallest card.
+
+        Called by the turn timer when a player runs out of time.
+
+        Args:
+            player_id: The ID of the player whose turn it is.
+
+        Returns:
+            Same shape as play_turn / pass_turn.
+        """
+        self._require_phase(GamePhase.PLAYING)
+
+        current_player = self._players[self._current_turn]
+
+        if current_player["player_id"] != player_id:
+            return {"success": False, "error": "Not your turn"}
+
+        if self._last_play_cards is not None:
+            # Can pass → auto-pass
+            return self.pass_turn(player_id)
+        else:
+            # Free play → play the smallest single card
+            hand = current_player["hand"]
+            if not hand:
+                return {"success": False, "error": "No cards remaining"}
+            # hand is sorted, first card is smallest
+            return self.play_turn(player_id, [hand[0]])
 
     def end_round(self) -> Dict[str, Any]:
         """End the current round explicitly (e.g., on forfeit).
@@ -671,6 +714,10 @@ class GameStateManager:
 
         self._phase = GamePhase.ROUND_END
         self._previous_winner_id = winner_id
+
+        # Clear per-player last play records for next round
+        self._player_last_plays = {}
+        self._player_last_actions = {}
 
         result = {
             "success": True,
@@ -780,6 +827,14 @@ class GameStateManager:
                 if self._phase == GamePhase.DECLARATION and self._players
                 else None
             ),
+            "player_last_plays": {
+                self._players[i]["player_id"]: self._player_last_plays.get(i)
+                for i in range(len(self._players))
+            },
+            "player_last_actions": {
+                self._players[i]["player_id"]: self._player_last_actions.get(i)
+                for i in range(len(self._players))
+            },
         }
 
         return state

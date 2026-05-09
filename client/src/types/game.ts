@@ -85,6 +85,14 @@ export interface GameState {
 
   /** Legacy support: some messages include success flag. */
   success?: boolean;
+
+  /** Per-player last play: player_id -> last valid CardPlay they made, or null */
+  player_last_plays?: Record<string, CardPlay | null>;
+  /** Per-player last action: player_id -> 'play' | 'pass' | null */
+  player_last_actions?: Record<string, string | null>;
+
+  /** Turn countdown remaining seconds (server-side timer). */
+  remaining_time?: number;
 }
 
 // ---------------------------------------------------------------------------
@@ -121,6 +129,8 @@ export interface PlayResponse {
 export interface RoundResult {
   winner_id: string;
   scores: Record<string, number>;
+  /** Per-player score changes this round (delta). */
+  score_deltas?: Record<string, number>;
   is_declaration_game: boolean;
   declarer_id?: string | null;
   breaker_id?: string | null;
