@@ -2,6 +2,7 @@ import { useMemo, useCallback, useState, useEffect } from 'react'
 import { createPortal } from 'react-dom'
 import { useParams, useSearchParams } from 'react-router-dom'
 import type { Card as CardType } from '../types/card'
+import { Suit, RANK_DISPLAY, SUIT_DISPLAY } from '../types/card'
 import type { GamePhase, PlayerState } from '../types/game'
 import { useGameWebSocket } from '../hooks/useGameWebSocket'
 import DealAnimation from '../components/DealAnimation'
@@ -90,6 +91,7 @@ function GameRoom() {
   const [playerName, setPlayerName] = useState(paramName)
   const [readyClicked, setReadyClicked] = useState(false)
   const [dealAnimDone, setDealAnimDone] = useState(false)
+  const [playAnimCards, setPlayAnimCards] = useState<CardType[] | null>(null)
 
   const {
     gameState,
@@ -183,6 +185,9 @@ function GameRoom() {
     const cards = [...selectedCardIds]
       .sort((a, b) => a - b)
       .map((i) => myHand[i])
+    // Trigger play animation
+    setPlayAnimCards(cards)
+    setTimeout(() => setPlayAnimCards(null), 500)
     sendPlay(cards)
     dispatch({ type: 'CLEAR_SELECTION' })
   }, [selectedCardIds, isMyTurn, myHand, sendPlay, dispatch])
@@ -369,6 +374,50 @@ function GameRoom() {
       </>,
       document.body
     )}
+
+      {/* ── Play animation overlay ── */}
+      {playAnimCards && playAnimCards.length > 0 && createPortal(
+        <div className="play-animation">
+          {playAnimCards.map((card, i) => {
+            const isRed = card.suit === Suit.HEART || card.suit === Suit.DIAMOND
+            return (
+              <div
+                key={`play-${i}`}
+                className={`play-animation__card${isRed ? ' play-animation__card--red' : ''}`}
+                style={{
+                  '--play-delay': `${i * 60}ms`,
+                  '--play-rotate': `${(i - (playAnimCards.length - 1) / 2) * 4}deg`,
+                  left: `calc(50% + ${(i - (playAnimCards.length - 1) / 2) * 30}px)`,
+                  bottom: '80px',
+                } as React.CSSProperties}
+              >
+                <span className="play-animation__card-rank">{RANK_DISPLAY[card.rank]}</span>
+                <span className="play-animation__card-suit">{SUIT_DISPLAY[card.suit]}</span>
+              </div>
+            )
+          })}
+        </div>,
+        document.body
+      )}
+
+      {/* ── Win confetti overlay ── */}
+      {phase === 'ROUND_END' && gameState && createPortal(
+        <div className="win-confetti" key={gameState.round_number}>
+          {Array.from({ length: 40 }, (_, i) => (
+            <div
+              key={i}
+              className="win-confetti__piece"
+              style={{
+                left: `${Math.random() * 100}%`,
+                background: ['#c8962e', '#e8c56d', '#c44536', '#f5f0e8', '#d4a017'][i % 5],
+                animationDelay: `${Math.random() * 2}s`,
+                animationDuration: `${1.5 + Math.random() * 1.5}s`,
+              }}
+            />
+          ))}
+        </div>,
+        document.body
+      )}
   </>
   )
 
