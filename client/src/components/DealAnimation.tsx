@@ -57,10 +57,16 @@ function DealAnimation({
   useEffect(() => {
     if (state !== 'dealing' || doneRef.current) return
     if (totalCards === 0) {
-      onDone()
-      return
+      // At least show a deck pile for 1.5s even if card data isn't ready yet
+      const timer = setTimeout(() => {
+        if (!doneRef.current) {
+          doneRef.current = true
+          onDone()
+        }
+      }, 1500)
+      return () => clearTimeout(timer)
     }
-    const totalDuration = totalCards * 80 + 600
+    const totalDuration = Math.max(totalCards * 80 + 600, 1500)
     const timer = setTimeout(() => {
       if (!doneRef.current) {
         doneRef.current = true

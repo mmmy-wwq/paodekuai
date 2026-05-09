@@ -33,17 +33,17 @@ body {
   font-family: -apple-system, BlinkMacSystemFont, 'PingFang SC', 'Microsoft YaHei', 'Noto Sans SC', sans-serif;
   background:
     /* Warm glow at top */
-    radial-gradient(ellipse at 50% 0%, rgba(200, 150, 46, 0.05) 0%, transparent 50%),
+    radial-gradient(ellipse at 50% 0%, rgba(200, 150, 46, 0.12) 0%, transparent 40%),
     /* Distant mountain — left */
-    radial-gradient(ellipse 60% 40% at 20% 65%, rgba(55, 35, 25, 0.35) 0%, transparent 60%),
+    radial-gradient(ellipse 55% 35% at 15% 72%, rgba(80, 45, 30, 0.6) 0%, transparent 50%),
     /* Distant mountain — right */
-    radial-gradient(ellipse 50% 35% at 75% 60%, rgba(55, 35, 25, 0.3) 0%, transparent 55%),
-    /* Mid mountain — center */
-    radial-gradient(ellipse 40% 30% at 50% 55%, rgba(70, 45, 35, 0.2) 0%, transparent 45%),
+    radial-gradient(ellipse 45% 30% at 82% 68%, rgba(70, 40, 25, 0.55) 0%, transparent 50%),
+    /* Mid mountain — center-left */
+    radial-gradient(ellipse 35% 28% at 40% 62%, rgba(90, 55, 35, 0.45) 0%, transparent 40%),
     /* Near terrain — bottom ridge */
-    radial-gradient(ellipse 80% 25% at 50% 90%, rgba(30, 16, 10, 0.5) 0%, transparent 50%),
-    /* Mist layer — bottom */
-    radial-gradient(ellipse 100% 20% at 50% 100%, rgba(60, 40, 30, 0.3) 0%, transparent 100%),
+    radial-gradient(ellipse 90% 22% at 50% 96%, rgba(20, 10, 6, 0.75) 0%, transparent 45%),
+    /* Mist layer — bottom fade */
+    radial-gradient(ellipse 100% 18% at 50% 100%, rgba(70, 45, 35, 0.5) 0%, transparent 100%),
     /* Base */
     var(--bg-table);
   color: var(--text-primary);
@@ -149,27 +149,27 @@ input {
   height: 40px;
   border-radius: 4px;
   background:
-    /* Floral roundel (团花) — petal pattern */
-    radial-gradient(circle at 50% 35%, rgba(200, 150, 46, 0.12) 1px, transparent 1px),
-    radial-gradient(circle at 50% 65%, rgba(200, 150, 46, 0.12) 1px, transparent 1px),
-    radial-gradient(circle at 35% 50%, rgba(200, 150, 46, 0.12) 1px, transparent 1px),
-    radial-gradient(circle at 65% 50%, rgba(200, 150, 46, 0.12) 1px, transparent 1px),
-    /* Center medallion */
+    /* Floral petals — four dots around center */
+    radial-gradient(circle at 50% 30%, rgba(200, 150, 46, 0.35) 1px, transparent 1px),
+    radial-gradient(circle at 50% 70%, rgba(200, 150, 46, 0.35) 1px, transparent 1px),
+    radial-gradient(circle at 30% 50%, rgba(200, 150, 46, 0.35) 1px, transparent 1px),
+    radial-gradient(circle at 70% 50%, rgba(200, 150, 46, 0.35) 1px, transparent 1px),
+    /* Center medallion — solid gold dot with ring */
     radial-gradient(circle at 50% 50%,
-      rgba(200, 150, 46, 0.15) 0px,
-      rgba(200, 150, 46, 0.08) 3px,
+      rgba(200, 150, 46, 0.3) 0px,
+      rgba(200, 150, 46, 0.15) 3px,
       transparent 5px
     ),
-    /* Inner ring */
+    /* Outer ring */
     radial-gradient(circle at 50% 50%,
       transparent 5px,
-      rgba(200, 150, 46, 0.06) 5px,
-      transparent 7px
+      rgba(200, 150, 46, 0.12) 6px,
+      transparent 8px
     ),
     /* Base gradient */
     linear-gradient(135deg, #5a1a1a, #3d1111);
   border: 1px solid rgba(200, 150, 46, 0.25);
-  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.4), inset 0 0 3px rgba(200, 150, 46, 0.06);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.4), inset 0 0 3px rgba(200, 150, 46, 0.08);
 }
 
 .opponent-slot__name {
@@ -681,11 +681,11 @@ html.force-landscape #root::before {
   top: 0;
   left: 0;
   background:
-    radial-gradient(ellipse at 50% 0%, rgba(200, 150, 46, 0.05) 0%, transparent 50%),
-    radial-gradient(ellipse 60% 40% at 20% 65%, rgba(55, 35, 25, 0.35) 0%, transparent 60%),
-    radial-gradient(ellipse 50% 35% at 75% 60%, rgba(55, 35, 25, 0.3) 0%, transparent 55%),
-    radial-gradient(ellipse 40% 30% at 50% 55%, rgba(70, 45, 35, 0.2) 0%, transparent 45%),
-    radial-gradient(ellipse 80% 25% at 50% 90%, rgba(30, 16, 10, 0.5) 0%, transparent 50%),
+    radial-gradient(ellipse at 50% 0%, rgba(200, 150, 46, 0.12) 0%, transparent 40%),
+    radial-gradient(ellipse 55% 35% at 15% 72%, rgba(80, 45, 30, 0.6) 0%, transparent 50%),
+    radial-gradient(ellipse 45% 30% at 82% 68%, rgba(70, 40, 25, 0.55) 0%, transparent 50%),
+    radial-gradient(ellipse 35% 28% at 40% 62%, rgba(90, 55, 35, 0.45) 0%, transparent 40%),
+    radial-gradient(ellipse 90% 22% at 50% 96%, rgba(20, 10, 6, 0.75) 0%, transparent 45%),
     var(--bg-dark);
   z-index: -1;
 }

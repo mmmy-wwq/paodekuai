@@ -91,6 +91,7 @@ function GameRoom() {
   const [playerName, setPlayerName] = useState(paramName)
   const [readyClicked, setReadyClicked] = useState(false)
   const [dealAnimDone, setDealAnimDone] = useState(false)
+  const [showDealAnim, setShowDealAnim] = useState(false)
   const [playAnimCards, setPlayAnimCards] = useState<CardType[] | null>(null)
 
   const {
@@ -119,6 +120,8 @@ function GameRoom() {
     // Reset deal animation for new dealing phase
     if (gameState?.phase === 'DEALING') {
       setDealAnimDone(false)
+      setShowDealAnim(true)
+      console.log('[DEALING] triggered, myHand=', myHand.length, 'opponents=', opponentCardCounts, 'totalDealCards=', totalDealCards)
     }
   }, [gameState?.phase])
 
@@ -375,6 +378,22 @@ function GameRoom() {
       document.body
     )}
 
+      {/* ── Deal animation overlay (persists across phases) ── */}
+      {showDealAnim && !dealAnimDone && createPortal(
+        <DealAnimation
+          myCardCount={myHand.length}
+          opponentCounts={opponentCardCounts}
+          currentIndex={0}
+          totalCards={totalDealCards}
+          state="dealing"
+          onDone={() => {
+            setDealAnimDone(true)
+            setTimeout(() => setShowDealAnim(false), 300)
+          }}
+        />,
+        document.body
+      )}
+
       {/* ── Play animation overlay ── */}
       {playAnimCards && playAnimCards.length > 0 && createPortal(
         <div className="play-animation">
@@ -557,59 +576,13 @@ function GameRoom() {
   // =====================================================================
 
   if (phase === 'DEALING') {
-    return (
-      <div className="game-layout">
-        {/* Top bar */}
-        <div className="game-layout__top-bar">
-          <span className="game-layout__room-code">房间 {id ?? '?'}</span>
-          <span className="game-layout__round">
-            第 {gameState.round_number} 局 · 发牌中
-          </span>
+    return renderGameShell(
+      <div className="declare-modal">
+        <div className="declare-modal__box">
+          <h2 className="declare-modal__title">发牌中...</h2>
+          <p className="declare-modal__desc">请稍候，正在发牌</p>
         </div>
-
-        {/* Opponent areas — show current card backs */}
-        <div className="game-layout__opponents">
-          {opponents.map((p) => {
-            const cardCount = p.remaining_cards ?? p.hand?.length ?? 0
-            return (
-              <div key={p.player_id} className="opponent-slot">
-                <div className="opponent-slot__cards">
-                  {Array.from({ length: Math.min(cardCount, 10) }, (_, i) => (
-                    <div key={i} className="opponent-slot__card-back" />
-                  ))}
-                </div>
-                <span className="opponent-slot__name">{p.name}（{cardCount} 张）</span>
-              </div>
-            )
-          })}
-        </div>
-
-        {/* Play area — DealAnimation overlay during dealing */}
-        <div className="game-layout__play-area" style={{ pointerEvents: 'none' }}>
-          {dealAnimDone ? (
-            <div className="declare-modal">
-              <div className="declare-modal__box">
-                <h2 className="declare-modal__title">发牌完成</h2>
-                <p className="declare-modal__desc">等待游戏开始...</p>
-              </div>
-            </div>
-          ) : (
-            <DealAnimation
-              myCardCount={myHand.length}
-              opponentCounts={opponentCardCounts}
-              currentIndex={0}
-              totalCards={totalDealCards}
-              state="dealing"
-              onDone={() => setDealAnimDone(true)}
-            />
-          )}
-        </div>
-
-        {/* No hand area during dealing — cards are flying to positions */}
-        <div className="hand-area hand-area--empty" style={{ position: 'relative' }}>
-          <p className="hand-area__empty-text">发牌中...</p>
-        </div>
-      </div>
+      </div>,
     )
   }
 
