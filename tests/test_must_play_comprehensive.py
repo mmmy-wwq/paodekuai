@@ -80,13 +80,14 @@ class TestMustPlayBasic:
     """必压基本规则测试：有上家单牌、下家只剩1张、当前玩家有更大的单张。"""
 
     def test_triggers_highest_single(self, engine_3p):
-        """场景：桌上单张5、下家1张、手牌有K和3 → 必须出K"""
+        """场景：桌上单张5、下家(逆时针)1张、手牌有K和3 → 必须出K"""
         last = identify([c("FIVE", "SPADE")])
         hand = [c("KING", "HEART"), c("THREE", "CLUB")]
+        # 逆时针: p0的下家是p2(index 2)
         state = {"players": [
             {"player_id": "p0", "remaining_cards": 5},
-            {"player_id": "p1", "remaining_cards": 1},  # 下家1张
-            {"player_id": "p2", "remaining_cards": 10},
+            {"player_id": "p1", "remaining_cards": 10},
+            {"player_id": "p2", "remaining_cards": 1},  # 逆时针下家剩1张
         ], "current_turn": 0}
         result = engine_3p.check_must_play(hand, last, state, player_index=0)
         assert result["triggered"] is True
@@ -202,28 +203,21 @@ class TestFreePlayMustPlay:
         gsm_3p.deal_cards(seed=42)
         _declare_all(gsm_3p, ["p0", "p1", "p2"])
 
-        # Manually set hands to control the scenario
         gsm_3p._players[0]["hand"] = [c("THREE", "SPADE"), c("KING", "SPADE")]
-        gsm_3p._players[1]["hand"] = [c("FIVE", "HEART")] * 5  # 5 cards
+        gsm_3p._players[1]["hand"] = [c("FIVE", "HEART")] * 5
         gsm_3p._players[2]["hand"] = [c("SEVEN", "CLUB")]  # 1 card!
         gsm_3p._current_turn = 0
         gsm_3p._last_play_cards = None  # Free play
-        gsm_3p._turn_number = 0
-
-        state = gsm_3p.get_state()
-        assert state["current_turn"] == "p0"
 
         # Try to play the smallest card (♠3) — should FAIL
         result = gsm_3p.play_turn("p0", [c("THREE", "SPADE")])
-
-        # ⚠️ This is where the bug is: currently this passes but should NOT
-        import sys
-        if not result.get("must_play"):
-            pytest.skip("BUG CONFIRMED: Free-play must-play rule NOT implemented")
-        
-        assert result["success"] is False
+        assert result["success"] is False, f"Expected reject, got: {result}"
         assert result["must_play"] is True
-        assert c("KING", "SPADE") in result.get("forced_cards", [])
+        # forced_cards are dicts (serialized), check the rank/suit
+        assert any(
+            fc.get("rank") == "KING" and fc.get("suit") == "SPADE"
+            for fc in result.get("forced_cards", [])
+        ), f"Expected ♠K in forced_cards, got: {result.get('forced_cards')}"
 
     def test_free_play_highest_single_accepted(self, gsm_3p, three_players):
         """
@@ -290,37 +284,31 @@ class TestCounterClockwiseTurn:
     """验证出牌顺序改为逆时针后正确性。"""
 
     def test_turn_advances_counter_clockwise(self, gsm_3p, three_players):
-        """3人局：p0 → p2 → p1 (逆时针)。"""
+        """验证 play_turn 后 current_turn 变为逆时针方向的下家。"""
         gsm_3p.start_game(three_players)
         gsm_3p.deal_cards(seed=42)
         _declare_all(gsm_3p, ["p0", "p1", "p2"])
 
-        # Find current player
         state = gsm_3p.get_state()
-        current = state["current_turn"]
+        first = state["current_turn"]
+        first_idx = next(i for i, p in enumerate(gsm_3p._players) if p["player_id"] == first)
 
-        # Set hands so everyone has many cards
-        for i, p in enumerate(gsm_3p._players):
-            p["hand"] = [c(str(r).zfill(2).replace("0", ""), "SPADE")
-                         for r in range(3, 10)][:7]
+        # Give everyone at least 2 cards
+        for p in gsm_3p._players:
+            p["hand"] = [c("THREE", "SPADE"), c("FOUR", "HEART"), c("FIVE", "CLUB")]
 
-        # Play to advance turn
-        gsm_3p._last_play_cards = None
-        # Current player plays a small card
-        players_order = [current]
-        for _ in range(5):  # Multiple turns
-            turn = gsm_3p.get_state()["current_turn"]
-            # Find any card in hand
-            player_data = [p for p in gsm_3p._players if p["player_id"] == turn][0]
-            if player_data["hand"]:
-                # Set last_play so pass is possible (otherwise we need to verify turn tracking)
-                gsm_3p._last_play_cards = [player_data["hand"][0]]
-                gsm_3p.pass_turn(turn)
-                players_order.append(gsm_3p.get_state()["current_turn"])
+        # First player plays a card
+        r = gsm_3p.play_turn(first, [c("THREE", "SPADE")])
+        assert r["success"] is True
 
-        # Verify counter-clockwise: p0→p2→p1→p0→p2...
-        # Just check the pattern has counter-clockwise progression
-        print(f"Turn order: {players_order}")
+        # Counter-clockwise: next should be (first_idx - 1) % n
+        expected_next_idx = (first_idx - 1) % 3
+        expected_next = gsm_3p._players[expected_next_idx]["player_id"]
+        state2 = gsm_3p.get_state()
+        assert state2["current_turn"] == expected_next, (
+            f"Expected {expected_next}, got {state2['current_turn']} "
+            f"(first={first}, first_idx={first_idx}, next_idx={expected_next_idx})"
+        )
 
 
 # ═══════════════════════════════════════════════════════════════════════
@@ -336,30 +324,30 @@ class TestAllPassFreePlay:
         gsm_3p.deal_cards(seed=42)
         _declare_all(gsm_3p, ["p0", "p1", "p2"])
 
-        # Set hands
-        for p in gsm_3p._players:
-            p["hand"] = [c("THREE", "SPADE"), c("FOUR", "HEART")]
-
-        # p0 plays, p1 passes, p2 passes → all pass, free play back to p0
-        gsm_3p._last_play_cards = None
+        # Give each player enough cards so no one ends up with 1 card mid-round
+        gsm_3p._players[0]["hand"] = [c("THREE", "SPADE"), c("FOUR", "HEART"), c("FIVE", "CLUB")]
+        gsm_3p._players[1]["hand"] = [c("SIX", "DIAMOND"), c("SEVEN", "SPADE"), c("EIGHT", "HEART")]
+        gsm_3p._players[2]["hand"] = [c("NINE", "CLUB"), c("TEN", "DIAMOND"), c("JACK", "SPADE")]
+        # Force first turn to p0
         gsm_3p._current_turn = 0
+        gsm_3p._last_play_cards = None
         gsm_3p._last_play_player_index = None
         gsm_3p._consecutive_passes = 0
         gsm_3p._turn_number = 0
 
-        # p0 plays a card
+        # p0 plays a card (free play) — next is p2 (counter-clockwise: 0-1 mod 3 = 2)
         r = gsm_3p.play_turn("p0", [c("THREE", "SPADE")])
-        assert r["success"] is True
+        assert r["success"] is True, f"p0 play failed: {r.get('error')}"
         assert gsm_3p._last_play_cards is not None
 
-        # p1 passes (p0's last_play exists)
-        r = gsm_3p.pass_turn("p1")
-        assert r["success"] is True
-
-        # p2 passes → all pass → clear
+        # p2 passes (next counter-clockwise from p0)
         r = gsm_3p.pass_turn("p2")
-        assert r["success"] is True
-        assert r.get("all_passed") is True
+        assert r["success"] is True, f"p2 pass failed: {r.get('error')}"
+
+        # p1 passes → all pass (active count = 3, consecutive_passes = 2 = active - 1)
+        r = gsm_3p.pass_turn("p1")
+        assert r["success"] is True, f"p1 pass failed: {r.get('error')}"
+        assert r.get("all_passed") is True, f"Expected all_passed, got: {r}"
         assert gsm_3p._last_play_cards is None  # 清空
 
     def test_all_pass_clears_player_last_plays(self, gsm_3p, three_players):
@@ -368,20 +356,25 @@ class TestAllPassFreePlay:
         gsm_3p.deal_cards(seed=42)
         _declare_all(gsm_3p, ["p0", "p1", "p2"])
 
-        for p in gsm_3p._players:
-            p["hand"] = [c("THREE", "SPADE"), c("FOUR", "HEART")]
-
-        gsm_3p._last_play_cards = None
+        gsm_3p._players[0]["hand"] = [c("THREE", "SPADE"), c("FOUR", "HEART"), c("FIVE", "CLUB")]
+        gsm_3p._players[1]["hand"] = [c("SIX", "DIAMOND"), c("SEVEN", "SPADE"), c("EIGHT", "HEART")]
+        gsm_3p._players[2]["hand"] = [c("NINE", "CLUB"), c("TEN", "DIAMOND"), c("JACK", "SPADE")]
         gsm_3p._current_turn = 0
+        gsm_3p._last_play_cards = None
         gsm_3p._last_play_player_index = None
         gsm_3p._consecutive_passes = 0
         gsm_3p._turn_number = 0
 
-        gsm_3p.play_turn("p0", [c("THREE", "SPADE")])
+        r = gsm_3p.play_turn("p0", [c("THREE", "SPADE")])
+        assert r["success"] is True
         assert len(gsm_3p._player_last_plays) > 0  # 有记录
 
-        gsm_3p.pass_turn("p1")
-        result = gsm_3p.pass_turn("p2")
+        # Next is p2 (counter-clockwise)
+        r = gsm_3p.pass_turn("p2")
+        assert r["success"] is True
+        # Then p1 → all pass
+        result = gsm_3p.pass_turn("p1")
+        assert result["success"] is True
 
         assert result.get("all_passed") is True
         assert len(gsm_3p._player_last_plays) == 0  # 全过清空

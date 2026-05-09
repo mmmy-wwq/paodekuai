@@ -148,12 +148,12 @@ class TestCheckMustPlay:
         }
 
     def test_must_play_triggers(self, engine_3p):
-        """Must-play triggers: SINGLE on table, next player has 1 card, current player has higher."""
+        """Must-play triggers: SINGLE on table, next player (counter-clockwise) has 1 card."""
         last = identify([c("FIVE", "SPADE")])
         assert last
         hand = [c("KING", "HEART"), c("THREE", "CLUB")]
-        # 3 players: p0=current(has K,3), p1=next(has 1 card)
-        state = self._make_state([5, 1, 10], current_turn=0)
+        # 3 players counter-clockwise: p0's next is p2 (index 2), p2 has 1 card
+        state = self._make_state([5, 10, 1], current_turn=0)
         result = engine_3p.check_must_play(
             hand=hand,
             last_play_pattern=last,

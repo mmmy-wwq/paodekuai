@@ -428,6 +428,29 @@ class GameStateManager:
                     "forced_cards": _cards_to_dicts(forced or []),
                 }
 
+        # ── 3b. Free-play must-play: next player has 1 card, must play highest single ──
+        if self._last_play_cards is None:
+            n_players = len(self._players)
+            next_idx = (self._current_turn - 1) % n_players  # counter-clockwise
+            if self._players[next_idx]["hand"] and len(self._players[next_idx]["hand"]) == 1:
+                # Check if current play is a single
+                from server.card_engine.recognizer import PatternType
+                play_pattern = identify(
+                    cards,
+                    player_count=self._config.player_count,
+                )
+                if play_pattern is not None and play_pattern.type == PatternType.SINGLE:
+                    # Find the highest single in hand
+                    forced_single = max(hand, key=lambda c: (c.rank.value, c.suit.value))
+                    if len(cards) != 1 or cards[0] != forced_single:
+                        return {
+                            "success": False,
+                            "phase": self._phase.value,
+                            "error": f"必压规则触发，上家出单时必须出最大单牌 ({forced_single})",
+                            "must_play": True,
+                            "forced_cards": _cards_to_dicts([forced_single]),
+                        }
+
         # ── 4. Validate the play via RuleEngine ─────────────────────
         validation = self._rule_engine.is_valid_play(
             cards=cards,
