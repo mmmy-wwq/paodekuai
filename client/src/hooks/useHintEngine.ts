@@ -278,14 +278,16 @@ function genBeating(sorted: Card[], target: PatternInfo): number[][] {
       for (const [rank, cards] of groups) {
         if (cards.length >= 3 && RANK_VALUE[rank] > target.mainValue) {
           const triple = cards.map((c) => sorted.indexOf(c)).slice(0, 3)
-          // Find 2 kickers (any cards of different rank)
+          // Find available kickers (any cards of different rank)
           const kickers: number[] = []
           for (let i = 0; i < sorted.length && kickers.length < 2; i++) {
             if (sorted[i].rank !== rank) kickers.push(i)
           }
-          if (kickers.length >= 2) {
-            plays.push([...triple, ...kickers])
-          }
+          // Always offer at least the triple alone (last hand: 三带零)
+          // Then add kickers if available
+          plays.push([...triple])
+          if (kickers.length >= 1) plays.push([...triple, ...kickers.slice(0, 1)])
+          if (kickers.length >= 2) plays.push([...triple, ...kickers.slice(0, 2)])
         }
       }
       break
@@ -298,8 +300,10 @@ function genBeating(sorted: Card[], target: PatternInfo): number[][] {
           for (let i = 0; i < sorted.length && kickers.length < 3; i++) {
             if (sorted[i].rank !== rank) kickers.push(i)
           }
-          if (kickers.length >= 3) {
-            plays.push([...four, ...kickers])
+          // Always offer at least the four alone (last hand: 四带零)
+          plays.push([...four])
+          for (let k = 1; k <= Math.min(kickers.length, 3); k++) {
+            plays.push([...four, ...kickers.slice(0, k)])
           }
         }
       }

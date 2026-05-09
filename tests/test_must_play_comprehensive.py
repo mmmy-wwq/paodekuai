@@ -275,6 +275,21 @@ class TestFreePlayMustPlay:
         result = gsm_3p.play_turn("p0", [c("THREE", "SPADE")])
         assert result["success"] is True
 
+    def test_free_play_bomb_allowed_when_next_has_1(self, gsm_3p, three_players):
+        """下家1张+自由出牌+出炸弹 → 允许。"""
+        gsm_3p.start_game(three_players)
+        gsm_3p.deal_cards(seed=42)
+        _declare_all(gsm_3p, ["p0", "p1", "p2"])
+
+        gsm_3p._players[0]["hand"] = [c("THREE", "SPADE"), c("THREE", "HEART"), c("THREE", "CLUB"), c("THREE", "DIAMOND")]
+        gsm_3p._players[1]["hand"] = [c("FIVE", "HEART")] * 5
+        gsm_3p._players[2]["hand"] = [c("SEVEN", "CLUB")]  # 1 card
+        gsm_3p._current_turn = 0
+        gsm_3p._last_play_cards = None
+
+        result = gsm_3p.play_turn("p0", [c("THREE", "SPADE"), c("THREE", "HEART"), c("THREE", "CLUB"), c("THREE", "DIAMOND")])
+        assert result["success"] is True, f"炸弹应被允许: {result.get('error')}"
+
 
 # ═══════════════════════════════════════════════════════════════════════
 # TEST CASE 4: 逆时针出牌顺序 (state machine level)
