@@ -99,3 +99,144 @@
   font-size: max(12px, min(16px, 3vw));
   line-height: 1;
 }
+
+/* ===== Four-Corner Cloud Motif (四角云纹) ===== */
+
+.card__corner {
+  position: absolute;
+  width: 14px;
+  height: 14px;
+  pointer-events: none;
+  opacity: 0.2;
+  z-index: 2;
+}
+
+.card__corner::before {
+  content: '';
+  position: absolute;
+  width: 100%;
+  height: 100%;
+  border-color: var(--card-black, #1a1410);
+  border-style: solid;
+  border-width: 0;
+}
+
+.card--red .card__corner::before {
+  border-color: var(--suit-red, #c44536);
+}
+
+/* Top-left: top and left lines */
+.card__corner--tl {
+  top: 3px;
+  left: 3px;
+}
+.card__corner--tl::before {
+  top: 0;
+  left: 0;
+  border-top-width: 1.5px;
+  border-left-width: 1.5px;
+  border-radius: 2px 0 0 0;
+  width: 10px;
+  height: 10px;
+}
+.card__corner--tl::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: var(--card-black, #1a1410);
+  opacity: 0.3;
+}
+.card--red .card__corner--tl::after {
+  background: var(--suit-red, #c44536);
+}
+
+/* Top-right: top and right lines */
+.card__corner--tr {
+  top: 3px;
+  right: 3px;
+}
+.card__corner--tr::before {
+  top: 0;
+  right: 0;
+  border-top-width: 1.5px;
+  border-right-width: 1.5px;
+  border-radius: 0 2px 0 0;
+  width: 10px;
+  height: 10px;
+}
+.card__corner--tr::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: var(--card-black, #1a1410);
+  opacity: 0.3;
+}
+.card--red .card__corner--tr::after {
+  background: var(--suit-red, #c44536);
+}
+
+/* Bottom-left: bottom and left lines */
+.card__corner--bl {
+  bottom: 3px;
+  left: 3px;
+}
+.card__corner--bl::before {
+  bottom: 0;
+  left: 0;
+  border-bottom-width: 1.5px;
+  border-left-width: 1.5px;
+  border-radius: 0 0 0 2px;
+  width: 10px;
+  height: 10px;
+}
+.card__corner--bl::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: var(--card-black, #1a1410);
+  opacity: 0.3;
+}
+.card--red .card__corner--bl::after {
+  background: var(--suit-red, #c44536);
+}
+
+/* Bottom-right: bottom and right lines */
+.card__corner--br {
+  bottom: 3px;
+  right: 3px;
+}
+.card__corner--br::before {
+  bottom: 0;
+  right: 0;
+  border-bottom-width: 1.5px;
+  border-right-width: 1.5px;
+  border-radius: 0 0 2px 0;
+  width: 10px;
+  height: 10px;
+}
+.card__corner--br::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  right: 0;
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: var(--card-black, #1a1410);
+  opacity: 0.3;
+}
+.card--red .card__corner--br::after {
+  background: var(--suit-red, #c44536);
+}

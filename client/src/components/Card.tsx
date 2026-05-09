@@ -42,6 +42,12 @@ function Card({ card, selected = false, onClick, size = 'sm', disabled = false }
       aria-selected={selected}
       aria-disabled={disabled}
     >
+      {/* Four-corner cloud motifs (四角云纹) */}
+      <span className="card__corner card__corner--tl" aria-hidden="true" />
+      <span className="card__corner card__corner--tr" aria-hidden="true" />
+      <span className="card__corner card__corner--bl" aria-hidden="true" />
+      <span className="card__corner card__corner--br" aria-hidden="true" />
+
       <div className="card__content">
         <span className="card__rank">{RANK_DISPLAY[card.rank]}</span>
         <span className="card__suit">{SUIT_DISPLAY[card.suit]}</span>
