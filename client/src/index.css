@@ -231,14 +231,26 @@ input {
   gap: 6px;
   pointer-events: none;
 }
-.game-table__turn-label {
-  font-size: 20px;
-  font-weight: 800;
-  color: var(--accent-gold-light);
-  text-shadow: 0 0 20px rgba(200, 150, 46, 0.6), 0 2px 8px rgba(0, 0, 0, 0.7);
-  letter-spacing: 2px;
-  white-space: nowrap;
+
+/* Arrow that points toward current player */
+.game-table__arrow {
+  width: 0;
+  height: 0;
+  border-left: 16px solid transparent;
+  border-right: 16px solid transparent;
+  border-bottom: 28px solid var(--accent-gold);
+  filter: drop-shadow(0 0 10px rgba(200, 150, 46, 0.6));
+  animation: ps-prompt-pulse 1.2s ease-in-out infinite;
+  transition: transform 0.3s ease;
 }
+/* Position-based rotations: arrow points FROM center TOWARD player */
+.game-table__arrow--top     { transform: rotate(0deg); }    /* up */
+.game-table__arrow--top-right { transform: rotate(45deg); }   /* up-right */
+.game-table__arrow--right   { transform: rotate(90deg); }   /* right */
+.game-table__arrow--top-left  { transform: rotate(-45deg); }  /* up-left */
+.game-table__arrow--left    { transform: rotate(-90deg); }  /* left */
+.game-table__arrow--me      { transform: rotate(180deg); }  /* down */
+
 .game-table__turn-info {
   display: flex;
   align-items: center;
@@ -271,8 +283,10 @@ input {
 html.force-landscape .game-table__center-indicator {
   top: 38%;
 }
-html.force-landscape .game-table__turn-label {
-  font-size: 16px;
+html.force-landscape .game-table__arrow {
+  border-left-width: 12px;
+  border-right-width: 12px;
+  border-bottom-width: 22px;
 }
 html.force-landscape .game-table__start-hint {
   font-size: 18px;

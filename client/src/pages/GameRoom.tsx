@@ -301,9 +301,11 @@ function GameRoom() {
       .sort((a, b) => a - b)
       .map((i) => sortedHand[i])
     sendPlay(cards)
+    // Speak my own play directly from user-gesture context (required by mobile)
+    speakPattern(cards)
     dispatch({ type: 'CLEAR_SELECTION' })
     resetHint()
-  }, [selectedCardIds, isMyTurn, sortedHand, sendPlay, dispatch, resetHint])
+  }, [selectedCardIds, isMyTurn, sortedHand, sendPlay, dispatch, resetHint, speakPattern])
 
   const handlePass = useCallback(() => {
     if (!isMyTurn) return
@@ -410,8 +412,6 @@ function GameRoom() {
     const lastActions = gameState.player_last_actions || {}
     const playerCount = players.length
 
-    const turnPlayerName = players.find((p) => p.player_id === gameState.current_turn)?.name || '...'
-
     // Side buttons portal
     const buttonsPortal = createPortal(
       <>
@@ -464,20 +464,15 @@ function GameRoom() {
             )
           })}
 
-          {/* Center turn indicator */}
+          {/* Center turn indicator — arrow points to current player */}
           <div className="game-table__center-indicator">
-            <span className="game-table__turn-label">
-              {isMyTurn ? '🔔 轮到你了' : `⏳ ${turnPlayerName} 出牌`}
-            </span>
+            <div className={`game-table__arrow game-table__arrow--${playerPositions[gameState?.current_turn ?? ''] || 'top'}`} />
           </div>
 
           {/* Center top info bar */}
           <div className="game-table__info">
             <span>🏠 {id ?? '?'}</span>
             <span>第 {gameState.round_number} 局</span>
-            <span className="game-table__turn">
-              {isMyTurn ? '🔔 轮到你了' : `⏳ ${turnPlayerName} 出牌`}
-            </span>
           </div>
 
           {/* Hand area at bottom */}
@@ -687,7 +682,6 @@ function GameRoom() {
   if (phase === 'DECLARATION') {
     const playerCount = players.length
     const declPlayerId = gameState?.declaration_turn_player_id
-    const declName = players.find((p) => p.player_id === declPlayerId)?.name || '...'
     const isMyDeclarationTurn = isDeclarationMyTurn && !allDeclaredPlayers
     const declButtons = isMyDeclarationTurn && !allDeclaredPlayers && createPortal(
       <>
@@ -743,17 +737,15 @@ function GameRoom() {
             )
           })}
 
-          {/* Center turn indicator */}
+          {/* Center turn indicator — arrow points to current declaraer */}
           <div className="game-table__center-indicator">
-            <span className="game-table__turn-label">
-              {isMyDeclarationTurn && !allDeclaredPlayers
-                ? '🔔 轮到你选择'
-                : `⏳ ${declName} 选择是否包牌`}
-            </span>
             {!allDeclaredPlayers && (
-              <div className="game-table__turn-info">
-                <span className="game-table__turn-desc">包牌者必须先出完所有牌</span>
-              </div>
+              <>
+                <div className={`game-table__arrow game-table__arrow--${playerPositions[declPlayerId ?? ''] || 'top'}`} />
+                <div className="game-table__turn-info">
+                  <span className="game-table__turn-desc">包牌者必须先出完所有牌</span>
+                </div>
+              </>
             )}
           </div>
 

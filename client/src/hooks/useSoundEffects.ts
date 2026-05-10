@@ -91,6 +91,7 @@ function buildPatternText(cards: Card[]): string {
 export function useSoundEffects() {
   const ctxRef = useRef<AudioContext | null>(null)
   const utteranceRef = useRef<SpeechSynthesisUtterance | null>(null)
+  const speechWarmed = useRef(false)
 
   const getCtx = useCallback((): AudioContext => {
     if (!ctxRef.current) {
@@ -102,8 +103,25 @@ export function useSoundEffects() {
     return ctxRef.current
   }, [])
 
+  /** Pre-warm speech synthesis on first user gesture (required by mobile browsers). */
+  const warmSpeech = useCallback(() => {
+    if (speechWarmed.current) return
+    speechWarmed.current = true
+    try {
+      if (typeof window !== 'undefined' && window.speechSynthesis) {
+        // Speak empty string to initialize the speech engine
+        const dummy = new SpeechSynthesisUtterance('')
+        dummy.volume = 0
+        window.speechSynthesis.speak(dummy)
+      }
+    } catch {
+      // Speech not available
+    }
+  }, [])
+
   /** Play card sound — short crisp "snap" like cards hitting a table. */
   const playCardSound = useCallback(() => {
+    warmSpeech()
     try {
       const ctx = getCtx()
       const now = ctx.currentTime
@@ -136,10 +154,11 @@ export function useSoundEffects() {
     } catch {
       // Audio not available — silently ignore
     }
-  }, [getCtx])
+  }, [getCtx, warmSpeech])
 
   /** Play pass sound — short low "thud". */
   const playPassSound = useCallback(() => {
+    warmSpeech()
     try {
       const ctx = getCtx()
       const now = ctx.currentTime
@@ -160,7 +179,7 @@ export function useSoundEffects() {
     } catch {
       // Audio not available
     }
-  }, [getCtx])
+  }, [getCtx, warmSpeech])
 
   /** Speak a card pattern using Speech Synthesis (Chinese voice). */
   const speakPattern = useCallback((cards: Card[]) => {
@@ -169,9 +188,7 @@ export function useSoundEffects() {
       if (!text) return
 
       // Cancel previous utterance to avoid overlapping
-      if (utteranceRef.current) {
-        window.speechSynthesis.cancel()
-      }
+      window.speechSynthesis.cancel()
 
       const utterance = new SpeechSynthesisUtterance(text)
       utterance.lang = 'zh-CN'
