@@ -106,6 +106,7 @@ def identify(
     cards: List[Card],
     player_count: int = 3,
     is_last_hand: bool = False,
+    has_ace_bomb: bool = True,
 ) -> Optional[CardPattern]:
     """Identify the card pattern formed by a list of cards.
 
@@ -143,7 +144,7 @@ def identify(
 
     # ── ACE_BOMB (A炸) ──────────────────────────────────────────
     # Exactly 3 Aces, only in 2 or 3 player mode.
-    if player_count in (2, 3) and total == 3 and len(rank_freq) == 1:
+    if has_ace_bomb and player_count in (2, 3) and total == 3 and len(rank_freq) == 1:
         rank_val = rank_values[0]
         if rank_val == Rank.ACE.value:
             return CardPattern(
@@ -232,12 +233,14 @@ def identify(
     #   - ≥2 pairs (each rank appears exactly 2 times)
     #   - All cards accounted for (total == 2 * unique_ranks)
     #   - Pair ranks must be consecutive
+    #   - No TWO (15) allowed
     if total >= 4 and total % 2 == 0:
         unique_count = len(rank_freq)
         if (
             unique_count >= 2
             and total == unique_count * 2
             and all(c == 2 for c in rank_freq.values())
+            and Rank.TWO.value not in rank_freq
             and _is_consecutive(rank_values)
         ):
             return CardPattern(

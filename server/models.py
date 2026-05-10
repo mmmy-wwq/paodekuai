@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 """
 Pydantic data models for 跑得快 (Pao De Kuai) game state.
 

@@ -1,13 +1,14 @@
 import { useMemo, useCallback, useState, useEffect, useRef } from 'react'
 import { createPortal } from 'react-dom'
 import { useParams, useSearchParams } from 'react-router-dom'
-import { Suit, RANK_DISPLAY, SUIT_DISPLAY, compareCards, type Card as CardType } from '../types/card'
+import { compareCards, type Card as CardType } from '../types/card'
 import type { GamePhase, PlayerState } from '../types/game'
 import { useGameWebSocket } from '../hooks/useGameWebSocket'
 import { useSoundEffects } from '../hooks/useSoundEffects'
 import { useHintCycle } from '../hooks/useHintEngine'
 import DealAnimation from '../components/DealAnimation'
 import HandArea from '../components/HandArea'
+import Avatar from '../components/Avatar'
 import PlayerSlot from '../components/PlayerSlot'
 
 // ============================================================================
@@ -93,6 +94,7 @@ function GameRoom() {
   const [readyClicked, setReadyClicked] = useState(false)
   const [dealAnimDone, setDealAnimDone] = useState(false)
   const [showDealAnim, setShowDealAnim] = useState(false)
+  const [showEndOverlay, setShowEndOverlay] = useState(false)
 
   const {
     gameState,
@@ -140,6 +142,17 @@ function GameRoom() {
       if (!readyPlayers.includes(myId)) {
         setReadyClicked(false)
       }
+    }
+  }, [gameState?.phase])
+
+  // ── ROUND_END: 3-second delay before result overlay ─────────
+  useEffect(() => {
+    if (gameState?.phase === 'ROUND_END') {
+      setShowEndOverlay(false)
+      const timer = setTimeout(() => setShowEndOverlay(true), 3000)
+      return () => clearTimeout(timer)
+    } else {
+      setShowEndOverlay(false)
     }
   }, [gameState?.phase])
 
@@ -219,10 +232,10 @@ function GameRoom() {
     }
   }, [gameState?.remaining_time, gameState?.current_turn, phase])
 
-  // ── Position mapping for PLAYING phase ──────────────────────
+  // ── Position mapping for PLAYING / ROUND_END phase ──────────
   // Counter-clockwise from me: me → right → top → left (4p)
   const playerPositions = useMemo(() => {
-    if (!gameState || phase !== 'PLAYING') return {}
+    if (!gameState || (phase !== 'PLAYING' && phase !== 'ROUND_END')) return {}
     const myIdx = players.findIndex((p) => p.player_id === myPlayerId)
     if (myIdx < 0) return {}
     const total = players.length
@@ -428,6 +441,7 @@ function GameRoom() {
           {players.map((p) => {
             const pos = playerPositions[p.player_id] || 'top'
             const cardCount = p.remaining_cards ?? p.hand?.length ?? 0
+            const histScore = (gameState.historical_scores as Record<string, number> | undefined)?.[p.name]
             return (
               <PlayerSlot
                 key={p.player_id}
@@ -436,49 +450,17 @@ function GameRoom() {
                 isActive={gameState.current_turn === p.player_id}
                 isDeclarer={p.is_declarer}
                 position={pos}
-                // My play area is rendered separately in center, not in slot
-                lastPlay={p.player_id === myPlayerId ? null : (lastPlays[p.player_id] ?? null)}
-                lastAction={p.player_id === myPlayerId ? null : (lastActions[p.player_id] ?? null)}
+                lastPlay={lastPlays[p.player_id] ?? null}
+                lastAction={lastActions[p.player_id] ?? null}
                 isMyTurn={p.player_id === myPlayerId && isMyTurn}
                 countdown={gameState.current_turn === p.player_id ? localCountdown : undefined}
+                sessionScore={p.score}
+                historicalScore={histScore}
               />
             )
           })}
 
-          {/* Center: my play area + countdown */}
-          <div className="game-table__center-play">
-            {/* My play area content */}
-            {(() => {
-              const myPlay = lastPlays[myPlayerId]
-              const myAction = lastActions[myPlayerId]
-              if (myPlay && myAction === 'play') {
-                return (
-                  <div className="gt-play-cards">
-                    {myPlay.cards.map((card, i) => {
-                      const isRed = card.suit === Suit.HEART || card.suit === Suit.DIAMOND
-                      return (
-                        <div key={i} className={`gt-mini-card${isRed ? ' gt-mini-card--red' : ''}`}>
-                          <span className="gt-mini-card__rank">{RANK_DISPLAY[card.rank]}</span>
-                          <span className="gt-mini-card__suit">{SUIT_DISPLAY[card.suit]}</span>
-                        </div>
-                      )
-                    })}
-                  </div>
-                )
-              }
-              if (myAction === 'pass') {
-                return <span className="gt-play-pass">过</span>
-              }
-              if (isMyTurn) {
-                return <span className="gt-play-prompt">请出牌</span>
-              }
-              return null
-            })()}
-            {/* My countdown: visible in center when it's my turn */}
-            {isMyTurn && localCountdown > 0 && (
-              <span className="gt-countdown">{localCountdown}</span>
-            )}
-          </div>
+          {/* Center area — cards/countdown are in each player's slot */}
 
           {/* Center top info bar */}
           <div className="game-table__info">
@@ -540,11 +522,13 @@ function GameRoom() {
           {opponents.map((p) => {
             const isActive = gameState.current_turn === p.player_id
             const cardCount = p.remaining_cards ?? p.hand?.length ?? 0
+            const histScore = (gameState.historical_scores as Record<string, number> | undefined)?.[p.name]
             return (
               <div
                 key={p.player_id}
                 className={`opponent-slot${isActive ? ' opponent-slot--active' : ''}`}
               >
+                <Avatar name={p.name} size={36} />
                 <div className="opponent-slot__cards">
                   {Array.from({ length: Math.min(cardCount, 10) }, (_, i) => (
                     <div key={i} className="opponent-slot__card-back" />
@@ -555,6 +539,22 @@ function GameRoom() {
                   {cardCount > 0 ? `（${cardCount} 张）` : ''}
                   {p.is_declarer ? ' 🏆' : ''}
                 </span>
+                <div className="opponent-slot__scores">
+                  <span className="os-score-item">
+                    <span className="os-score-label">本轮</span>
+                    <span className={`os-score-value ${p.score >= 0 ? 'os-score-value--pos' : 'os-score-value--neg'}`}>
+                      {p.score}
+                    </span>
+                  </span>
+                  {histScore !== undefined && (
+                    <span className="os-score-item">
+                      <span className="os-score-label">累计</span>
+                      <span className={`os-score-value ${histScore >= 0 ? 'os-score-value--pos' : 'os-score-value--neg'}`}>
+                        {histScore}
+                      </span>
+                    </span>
+                  )}
+                </div>
               </div>
             )
           })}
@@ -729,7 +729,7 @@ function GameRoom() {
   }
 
   // =====================================================================
-  // ROUND_END Phase — show 本局得分 (deltas) + 累计得分
+  // ROUND_END Phase — game table background + result overlay
   // =====================================================================
 
   if (phase === 'ROUND_END') {
@@ -739,19 +739,24 @@ function GameRoom() {
     const readyPlayers: string[] = gameState.ready_players || []
     const allReady = gameState.all_ready === true
     const iAmReady = readyPlayers.includes(myPlayerId)
+    const playerCount = players.length
 
     const handleReady = () => {
       setReadyClicked(true)
       sendReady()
     }
 
-    const playAreaContent = (
-      <div className="result-modal">
-        <div className="result-modal__box">
-          <h2 className="result-modal__title">本局结束</h2>
+    // Reuse PLAYING phase positions for the frozen background
+    const lastPlays = gameState.player_last_plays || {}
+    const lastActions = gameState.player_last_actions || {}
+
+    const resultOverlay = createPortal(
+      <div className="round-end-overlay">
+        <div className="round-end-overlay__box">
+          <h2 className="round-end-overlay__title">本局结束</h2>
 
           {isDeclarationGame && (
-            <p className="result-modal__declare-note">
+            <p className="round-end-overlay__declare-note">
               {result ? (
                 result.breaker_id
                   ? `${players.find((p) => p.player_id === result.breaker_id)?.name ?? '?'} 破牌成功！`
@@ -762,61 +767,106 @@ function GameRoom() {
             </p>
           )}
 
-          {/* Scores: 本局得分 + 累计得分 */}
-          <div className="result-modal__scores">
+          {/* Scores: 本局得分 + 本轮累计 + 历史累计 — with inline ready status */}
+          <div className="round-end-overlay__scores">
             {players.map((p) => {
               const delta = scoreDeltas[p.player_id] ?? 0
-              const cumScore = (gameState.historical_scores as Record<string, number> | undefined)?.[p.name] ?? p.score
+              const histScore = (gameState.historical_scores as Record<string, number> | undefined)?.[p.name]
+              const isReady = readyPlayers.includes(p.player_id)
               return (
-                <div key={p.player_id} className="result-modal__score-row" style={{ flexDirection: 'column', gap: '4px', padding: '10px 12px' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', width: '100%' }}>
-                    <span className="result-modal__player-name">
-                      {p.name} {p.player_id === myPlayerId ? '(你)' : ''}
-                      {result?.winner_id === p.player_id && ' 🎉'}
-                    </span>
-                    <span className={`result-modal__score-value ${delta >= 0 ? 'result-modal__score-value--positive' : 'result-modal__score-value--negative'}`}>
+                <div key={p.player_id} className="round-end-overlay__score-row">
+                  <div className="round-end-overlay__row-top">
+                    <div className="round-end-overlay__player-info">
+                      <span className="round-end-overlay__player-name">
+                        {p.name}
+                        {p.player_id === myPlayerId ? ' (你)' : ''}
+                        {result?.winner_id === p.player_id && ' 🎉'}
+                      </span>
+                      <span className={`round-end-overlay__ready-status ${isReady ? 'round-end-overlay__ready-status--ready' : ''}`}>
+                        {isReady ? '✓ 已准备' : '等待准备'}
+                      </span>
+                    </div>
+                    <span className={`round-end-overlay__score-value ${delta >= 0 ? 'round-end-overlay__score-value--pos' : 'round-end-overlay__score-value--neg'}`}>
                       {delta >= 0 ? '+' : ''}{delta}
                     </span>
                   </div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', width: '100%', fontSize: '12px', opacity: 0.7 }}>
-                    <span style={{ color: 'var(--text-secondary)' }}>累计</span>
-                    <span style={{ color: 'var(--accent-gold-light)' }}>{cumScore}</span>
+                  <div className="round-end-overlay__row-bottom">
+                    <span>本轮 <b>{p.score}</b></span>
+                    {histScore !== undefined && <span>累计 <b>{histScore}</b></span>}
                   </div>
                 </div>
               )
             })}
           </div>
 
-          <div className="ready-status" style={{ width: '100%', marginTop: '12px' }}>
-            {players.map((p) => {
-              const isReady = readyPlayers.includes(p.player_id)
-              const isMe = p.player_id === myPlayerId
-              return (
-                <div key={p.player_id} className={`ready-status__player ${isReady ? 'ready-status__player--ready' : 'ready-status__player--waiting'}`}>
-                  <span>{p.name} {isMe ? '(你)' : ''}</span>
-                  <span style={{ color: isReady ? 'var(--accent-gold-light)' : 'var(--text-secondary)', fontWeight: isReady ? 700 : 400 }}>
-                    {isReady ? '✓ 已准备' : '等待中'}
-                  </span>
-                </div>
-              )
-            })}
+          {/* Compact ready button */}
+          <div className="round-end-overlay__actions">
+            {allReady ? (
+              <span className="round-end-overlay__all-ready">下一局开始中...</span>
+            ) : (
+              <>
+                <button className="btn-action btn-action--primary" onClick={handleReady}
+                  disabled={iAmReady || readyClicked}
+                  style={{ flex: 1, padding: '8px 20px', fontSize: '14px' }}>
+                  {iAmReady || readyClicked ? '已准备' : '准备'}
+                </button>
+                {readyClicked && !iAmReady && (
+                  <span className="round-end-overlay__waiting">等待其他玩家准备...</span>
+                )}
+              </>
+            )}
           </div>
-
-          {allReady ? (
-            <p className="declare-modal__desc" style={{ color: 'var(--accent-gold)', fontWeight: 700, marginTop: '12px' }}>下一局开始中...</p>
-          ) : (
-            <>
-              <button className="btn-action btn-action--primary ready-btn result-modal__next-btn" onClick={handleReady} disabled={iAmReady || readyClicked} style={{ marginTop: '12px' }}>
-                {iAmReady || readyClicked ? '已准备' : '准备'}
-              </button>
-              {readyClicked && !iAmReady && <p className="declare-modal__desc" style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>等待其他玩家准备...</p>}
-            </>
-          )}
         </div>
-      </div>
+      </div>,
+      document.body
     )
 
-    return renderGameShell(playAreaContent)
+    return (
+      <>
+        <div className={`game-table game-table--${playerCount}p`}>
+          {players.map((p) => {
+            const pos = playerPositions[p.player_id] || 'top'
+            const cardCount = p.remaining_cards ?? p.hand?.length ?? 0
+            const histScore = (gameState.historical_scores as Record<string, number> | undefined)?.[p.name]
+            return (
+              <PlayerSlot
+                key={p.player_id}
+                name={p.name}
+                cardCount={cardCount}
+                isActive={false}
+                isDeclarer={p.is_declarer}
+                position={pos}
+                lastPlay={lastPlays[p.player_id] ?? null}
+                lastAction={lastActions[p.player_id] ?? null}
+                sessionScore={p.score}
+                historicalScore={histScore}
+                remainingCards={p.hand}
+              />
+            )
+          })}
+
+          {/* Info bar */}
+          <div className="game-table__info">
+            <span>🏠 {id ?? '?'}</span>
+            <span>第 {gameState.round_number} 局 · 本局结束</span>
+          </div>
+
+          {/* Hand area — remaining cards, disabled */}
+          <HandArea
+            cards={myHand}
+            selectedIds={selectedCardIds}
+            onToggleSelect={() => {}}
+            disabled={true}
+          />
+        </div>
+
+        {showEndOverlay && resultOverlay}
+        {!showEndOverlay && (
+          <div className="round-end-preview-label">本局结束 · 结算中...</div>
+        )}
+        {renderOverlays()}
+      </>
+    )
   }
 
   // =====================================================================

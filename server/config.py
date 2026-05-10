@@ -4,6 +4,8 @@ All settings have sensible defaults so the server runs out of the box.
 Tweak via environment variables for production or ngrok deployment.
 """
 
+from __future__ import annotations
+
 import os
 
 

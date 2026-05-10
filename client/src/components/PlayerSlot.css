@@ -33,9 +33,10 @@
 
 /* ── Positions ─────────────────────────────────────────────── */
 .player-slot--me {
-  bottom: 10%;
-  left: 50%;
-  transform: translateX(-50%);
+  bottom: 130px;
+  left: 8px;
+  transform: none;
+  z-index: 60;
 }
 .player-slot--top {
   top: 3%;
@@ -61,6 +62,17 @@
   left: 14%;
 }
 
+/* ── Player slot avatar styling ─────────────────────────────── */
+.player-slot .player-avatar {
+  border: 2px solid rgba(200, 150, 46, 0.2);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
+}
+
+.player-slot--active .player-avatar {
+  border-color: var(--accent-gold);
+  box-shadow: 0 0 12px rgba(200, 150, 46, 0.45);
+}
+
 /* ── Header ─────────────────────────────────────────────────── */
 .ps-header {
   display: flex;
@@ -69,16 +81,57 @@
   gap: 8px;
 }
 
+.ps-name-col {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+}
+
 .ps-name {
   font-size: 30px;
   font-weight: 700;
   color: var(--text-primary);
   letter-spacing: 0.5px;
   white-space: nowrap;
+  line-height: 1.1;
 }
 
 .ps-declarer {
   font-size: 24px;
+}
+
+/* ── Score display under player name ─────────────────────────── */
+.ps-scores {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+
+.ps-score-item {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 13px;
+}
+
+.ps-score-label {
+  color: var(--text-secondary);
+  opacity: 0.75;
+  font-weight: 400;
+}
+
+.ps-score-value {
+  font-weight: 700;
+  font-size: 14px;
+}
+
+.ps-score-value--pos {
+  color: var(--accent-gold-light);
+}
+
+.ps-score-value--neg {
+  color: var(--suit-red);
 }
 
 /* ── Card count: back face with number ──────────────────────── */
@@ -115,6 +168,63 @@
   color: var(--accent-gold);
 }
 
+/* ── Remaining hand cards (ROUND_END reveal) ──────────────────── */
+
+.ps-remaining-cards {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0;
+  max-width: 200px;
+}
+.ps-remaining-cards .ps-mini-card {
+  margin-left: -18px;
+  width: 32px;
+  height: 44px;
+  padding: 3px 0 0 4px;
+}
+.ps-remaining-cards .ps-mini-card:first-child {
+  margin-left: 0;
+}
+.ps-remaining-cards .ps-mini-card__rank {
+  font-size: 14px;
+}
+.ps-remaining-cards .ps-mini-card__suit {
+  font-size: 10px;
+  margin-top: 1px;
+}
+.ps-remaining-more {
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--accent-gold-light);
+  margin-left: 3px;
+  white-space: nowrap;
+}
+
+/* ── Position variants ───────────────────────────────────────── */
+/* Top: remaining cards inline inside header, pushed to right edge */
+.ps-remaining-cards--inline {
+  margin-left: auto;
+  max-width: none;
+  flex-shrink: 0;
+}
+
+/* Left/Right: float above the slot so play area stays untouched */
+.ps-remaining-cards--above {
+  position: absolute;
+  bottom: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  margin-bottom: 6px;
+  white-space: nowrap;
+  background: rgba(0, 0, 0, 0.15);
+  border-radius: 6px;
+  padding: 4px 6px;
+  z-index: 5;
+}
+
 /* ── Per-player play area ───────────────────────────────────── */
 
 .ps-play-area {
@@ -127,6 +237,17 @@
   border-radius: 8px;
   background: rgba(0, 0, 0, 0.25);
   position: relative;
+}
+
+/* "Me" play area repositions to float centered above hand area,
+   while avatar/name/scores stay at bottom-left. */
+.player-slot--me .ps-play-area {
+  position: fixed;
+  bottom: 38%;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 55;
+  min-width: 200px;
 }
 
 .ps-play-cards {
@@ -221,7 +342,8 @@ html.force-landscape .player-slot--top {
   top: 2%;
 }
 html.force-landscape .player-slot--me {
-  bottom: 7%;
+  bottom: 100px;
+  left: 6px;
 }
 html.force-landscape .player-slot--right {
   right: 2%;
@@ -254,7 +376,54 @@ html.force-landscape .ps-mini-card__suit {
   font-size: 12px;
   margin-top: 2px;
 }
+html.force-landscape .ps-name-col {
+  gap: 1px;
+}
+html.force-landscape .player-slot--me .player-avatar {
+  width: 36px !important;
+  height: 36px !important;
+}
+html.force-landscape .player-slot--left .player-avatar,
+html.force-landscape .player-slot--right .player-avatar {
+  width: 32px !important;
+  height: 32px !important;
+}
+html.force-landscape .ps-scores {
+  gap: 6px;
+}
+html.force-landscape .ps-score-item {
+  font-size: 11px;
+}
+html.force-landscape .ps-score-value {
+  font-size: 12px;
+}
+html.force-landscape .ps-remaining-cards .ps-mini-card {
+  width: 28px;
+  height: 40px;
+  margin-left: -14px;
+  padding: 3px 0 0 4px;
+}
+html.force-landscape .ps-remaining-cards .ps-mini-card__rank {
+  font-size: 12px;
+}
+html.force-landscape .ps-remaining-cards .ps-mini-card__suit {
+  font-size: 9px;
+  margin-top: 1px;
+}
+html.force-landscape .ps-remaining-more {
+  font-size: 10px;
+}
+html.force-landscape .ps-remaining-cards--above {
+  padding: 3px 4px;
+  margin-bottom: 4px;
+}
 html.force-landscape .ps-play-area {
+  min-height: 60px;
+  padding: 6px 10px;
+}
+html.force-landscape .player-slot--me .ps-play-area {
+  bottom: 40%;
+  min-width: 140px;
   min-height: 60px;
   padding: 6px 10px;
 }

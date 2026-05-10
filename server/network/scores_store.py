@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 """
 Persistent score storage for player historical scores.
 

@@ -5,6 +5,8 @@ Covers phase transitions, invalid-state guards, play/pass mechanics,
 must-play enforcement, round-end scoring, and next-round advancement.
 """
 
+from __future__ import annotations
+
 import pytest
 
 from server.card_engine.card import Card, Rank, Suit

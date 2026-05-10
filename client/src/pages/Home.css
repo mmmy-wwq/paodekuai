@@ -55,31 +55,33 @@
   flex: 1;
   padding: 0.6rem 0.8rem;
   border-radius: 8px;
-  border: 2px solid rgba(200, 150, 46, 0.35);
-  background: rgba(196, 181, 160, 0.06);
-  color: var(--text-secondary);
+  border: 2px solid rgba(200, 150, 46, 0.4);
+  background: rgba(0, 0, 0, 0.35);
+  color: var(--accent-gold-light);
   font-size: 1rem;
-  font-weight: 600;
+  font-weight: 700;
   cursor: pointer;
   transition: all 0.2s ease;
   text-align: center;
   font-family: inherit;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.5);
 }
 
 .home-preset-btn:hover {
-  background: rgba(200, 150, 46, 0.1);
-  border-color: var(--accent-gold);
-  color: var(--accent-gold-light);
-}
-
-.home-preset-btn--active {
-  background: rgba(200, 150, 46, 0.18);
+  background: rgba(200, 150, 46, 0.2);
   border-color: var(--accent-gold);
   color: #fff;
 }
 
+.home-preset-btn--active {
+  background: rgba(200, 150, 46, 0.3);
+  border-color: var(--accent-gold);
+  color: #fff;
+  box-shadow: 0 0 12px rgba(200, 150, 46, 0.3);
+}
+
 .home-preset-btn--active:hover {
-  background: rgba(200, 150, 46, 0.22);
+  background: rgba(200, 150, 46, 0.35);
 }
 
 /* ── Text input ── */
@@ -88,8 +90,8 @@
   flex: 1;
   padding: 0.75rem 1rem;
   border-radius: 8px;
-  border: 2px solid rgba(200, 150, 46, 0.3);
-  background: rgba(245, 240, 232, 0.08);
+  border: 2px solid rgba(200, 150, 46, 0.4);
+  background: rgba(0, 0, 0, 0.35);
   color: var(--text-primary);
   font-size: 1rem;
   outline: none;
@@ -99,7 +101,11 @@
 
 .home-input:focus {
   border-color: var(--accent-gold);
-  background: rgba(245, 240, 232, 0.12);
+  background: rgba(0, 0, 0, 0.5);
+}
+
+.home-input::placeholder {
+  color: rgba(196, 181, 160, 0.6);
 }
 
 .home-input::placeholder {
@@ -146,14 +152,15 @@
   transition: all 0.2s ease;
   text-align: center;
   border: 2px solid var(--accent-gold);
-  background: rgba(196, 181, 160, 0.08);
-  color: var(--text-secondary);
+  background: rgba(0, 0, 0, 0.35);
+  color: var(--accent-gold-light);
   font-family: inherit;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.5);
 }
 
 .home-btn:hover {
-  background: rgba(200, 150, 46, 0.12);
-  color: var(--accent-gold-light);
+  background: rgba(200, 150, 46, 0.2);
+  color: #fff;
 }
 
 .home-btn-join {
@@ -189,18 +196,20 @@
   padding: 0.75rem 1.5rem;
   border-radius: 8px;
   border: 2px solid var(--accent-gold);
-  background: rgba(200, 150, 46, 0.1);
+  background: rgba(0, 0, 0, 0.35);
   color: var(--accent-gold-light);
   font-weight: 700;
   font-size: 1rem;
   cursor: pointer;
   transition: all 0.2s ease;
   font-family: inherit;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.5);
 }
 
 .home-btn-family:hover:not(:disabled) {
-  background: rgba(200, 150, 46, 0.18);
-  box-shadow: 0 2px 10px rgba(200, 150, 46, 0.25);
+  background: rgba(200, 150, 46, 0.2);
+  box-shadow: 0 0 12px rgba(200, 150, 46, 0.3);
+  color: #fff;
 }
 
 .home-btn-family:disabled {

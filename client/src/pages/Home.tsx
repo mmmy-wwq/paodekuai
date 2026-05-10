@@ -3,7 +3,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom'
 import './Home.css'
 
 const ROOM_CHARS = 'ABCDEFGHJKMNPQRSTUVWXYZ'
-const PRESET_NAMES = ['爸爸', '妈妈', '姐姐', '我']
+const PRESET_NAMES = ['爸爸', '妈妈', '姐姐', '弟弟']
 const FAMILY_ROOM = '一家人'
 
 function generateRoomCode(): string {

@@ -6,7 +6,6 @@
   left: 0;
   right: 0;
   padding: 4px 8px 12px;
-  background: linear-gradient(to top, rgba(44, 24, 16, 0.95) 60%, rgba(44, 24, 16, 0) 100%);
   z-index: 50;
   display: flex;
   justify-content: center;

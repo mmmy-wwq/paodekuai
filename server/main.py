@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 """Pao De Kuai card game server.
  
 FastAPI application serving the SPA client and WebSocket game endpoint.

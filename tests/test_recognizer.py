@@ -182,15 +182,13 @@ class TestIdentifyConsecutivePairs:
         assert result is None
 
     def test_consecutive_pairs_with_two(self):
-        """Consecutive pairs CAN include TWO (e.g., A-A-2-2 is valid)."""
+        """Consecutive pairs CANNOT include TWO (跑得快规则)."""
         cards = [
             c("ACE", "SPADE"), c("ACE", "HEART"),
             c("TWO", "CLUB"), c("TWO", "DIAMOND"),
         ]
         result = identify(cards)
-        assert result is not None
-        assert result.type == PatternType.CONSECUTIVE_PAIRS
-        assert result.main_rank == Rank.TWO.value
+        assert result is None, "连对不应包含TWO"
 
     def test_single_pair_not_consecutive_pairs(self):
         """A single pair of cards is recognized as PAIR, not CONSECUTIVE_PAIRS."""

@@ -193,6 +193,7 @@ def _generate_kicker_combos(
 def _enumerate_all_patterns(
     hand: List[Card],
     player_count: int,
+    has_ace_bomb: bool = True,
 ) -> List[CardPattern]:
     """Enumerate all valid card patterns that can be formed from a hand.
 
@@ -241,7 +242,7 @@ def _enumerate_all_patterns(
             _add(list(cards))
 
     # ── ACE_BOMB (A炸) ──────────────────────────────────────────
-    if player_count in (2, 3):
+    if has_ace_bomb and player_count in (2, 3):
         ace_cards = cards_by_rank.get(Rank.ACE.value, [])
         if len(ace_cards) == 3:
             _add(list(ace_cards))
@@ -279,6 +280,7 @@ def get_all_playable(
     last_play: Optional[CardPattern],
     player_count: int,
     is_must_play: bool = False,
+    has_ace_bomb: bool = True,
 ) -> List[CardPattern]:
     """Enumerate all patterns from `hand` that can be legally played.
 
@@ -318,7 +320,7 @@ def get_all_playable(
         return sorted(patterns, key=lambda p: p.main_rank, reverse=True)
 
     # ── Enumerate all valid patterns from hand ─────────────────────
-    all_patterns = _enumerate_all_patterns(hand, player_count)
+    all_patterns = _enumerate_all_patterns(hand, player_count, has_ace_bomb)
 
     # ── Free play: return all ──────────────────────────────────────
     if last_play is None:

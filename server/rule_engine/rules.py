@@ -384,7 +384,8 @@ class RuleEngine:
         seen: set[tuple] = set()
 
         def _add(cards: List[Card]) -> None:
-            p = identify(cards, player_count=player_count, is_last_hand=False)
+            p = identify(cards, player_count=player_count, is_last_hand=False,
+                         has_ace_bomb=self.config.has_ace_bomb)
             if p is None:
                 return
             key = (p.type, p.main_rank, p.length, p.kicker_count)

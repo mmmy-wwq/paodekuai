@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 """
 Scoring engine for 跑得快 (Pao De Kuai).
 

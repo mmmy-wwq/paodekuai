@@ -863,8 +863,6 @@ class GameServer:
                 return
 
             result = gsm2.auto_play(pid)
-            if not result.get("success"):
-                return
 
             if result.get("phase") == "ROUND_END":
                 # Persist scores
@@ -874,13 +872,19 @@ class GameServer:
                         p_info = room2.players.get(pid2)
                         if p_info:
                             add_score(p_info.get("name", pid2), delta)
+                # Still broadcast ROUND_END state
+                await self.broadcast_state(room_id_captured)
+                return
 
-            # Start timer for NEXT turn BEFORE broadcasting,
-            # so remaining_time appears in the state
-            room3 = await self._rm.get_room(room_id_captured)
-            if room3 and room3.game_state_manager and room3.game_state_manager._phase.value == "PLAYING":
-                await self._start_turn_timer(room_id_captured)
+            if result.get("success"):
+                # Start timer for NEXT turn BEFORE broadcasting,
+                # so remaining_time appears in the state
+                room3 = await self._rm.get_room(room_id_captured)
+                if room3 and room3.game_state_manager and room3.game_state_manager._phase.value == "PLAYING":
+                    await self._start_turn_timer(room_id_captured)
 
+            # Always broadcast so the client gets updated state
+            # (even on failure — shows must-play error info on the client side)
             await self.broadcast_state(room_id_captured)
 
         timer.start(duration_sec=30, on_timeout=on_timeout)

@@ -417,8 +417,10 @@ class GameStateManager:
 
         if must_result["triggered"]:
             forced = must_result["forced_cards"]
-            # The player MUST play the forced card(s)
-            if set(cards) != set(forced or []):
+            # The player MUST play the forced card(s) — compare by RANK, not object
+            if len(cards) != len(forced) or any(
+                c.rank.value != f.rank.value for c, f in zip(cards, forced)
+            ):
                 forced_desc = ", ".join(str(c) for c in (forced or []))
                 return {
                     "success": False,
@@ -442,7 +444,7 @@ class GameStateManager:
                 if play_pattern is not None and play_pattern.type == PatternType.SINGLE:
                     # Find the highest single in hand
                     forced_single = max(hand, key=lambda c: (c.rank.value, c.suit.value))
-                    if len(cards) != 1 or cards[0] != forced_single:
+                    if len(cards) != 1 or cards[0].rank.value != forced_single.rank.value:
                         return {
                             "success": False,
                             "phase": self._phase.value,
@@ -625,32 +627,53 @@ class GameStateManager:
         }
 
     def auto_play(self, player_id: str) -> Dict[str, Any]:
-        """Auto-play on timeout: pass if possible, else play the smallest card.
+        """Auto-play on timeout.
 
-        Called by the turn timer when a player runs out of time.
-
-        Args:
-            player_id: The ID of the player whose turn it is.
-
-        Returns:
-            Same shape as play_turn / pass_turn.
+        Logic:
+          1. If there is a last_play on the table → check must-play rule:
+             - Must-play triggered → play the forced card(s).
+             - Not triggered → pass.
+          2. If free play (no last_play) → check free-play must-play:
+             - Next player (counter-clockwise) has exactly 1 card → play highest single.
+             - Otherwise → play the smallest single card.
         """
         self._require_phase(GamePhase.PLAYING)
 
         current_player = self._players[self._current_turn]
-
         if current_player["player_id"] != player_id:
             return {"success": False, "error": "Not your turn"}
 
+        hand = current_player["hand"]
+        if not hand:
+            return {"success": False, "error": "No cards remaining"}
+
         if self._last_play_cards is not None:
-            # Can pass → auto-pass
+            # ── Table has cards: check must-play (必压) rule ──────────
+            last_play_pattern = identify(
+                self._last_play_cards,
+                player_count=self._config.player_count,
+            )
+            must_play_state = self._build_must_play_state()
+            must_result = self._rule_engine.check_must_play(
+                hand=hand,
+                last_play_pattern=last_play_pattern,
+                game_state=must_play_state,
+                player_index=self._current_turn,
+            )
+            if must_result.get("triggered"):
+                forced = must_result["forced_cards"]
+                return self.play_turn(player_id, forced)
+            # Not forced → can pass
             return self.pass_turn(player_id)
         else:
-            # Free play → play the smallest single card
-            hand = current_player["hand"]
-            if not hand:
-                return {"success": False, "error": "No cards remaining"}
-            # hand is sorted, first card is smallest
+            # ── Free play: check if next player has 1 card ────────────
+            n_players = len(self._players)
+            next_idx = (self._current_turn - 1) % n_players
+            if self._players[next_idx]["hand"] and len(self._players[next_idx]["hand"]) == 1:
+                # Must play highest single
+                forced_single = max(hand, key=lambda c: (c.rank.value, c.suit.value))
+                return self.play_turn(player_id, [forced_single])
+            # Normal free play: play the smallest single (hand[0])
             return self.play_turn(player_id, [hand[0]])
 
     def end_round(self) -> Dict[str, Any]:
@@ -738,10 +761,6 @@ class GameStateManager:
         self._phase = GamePhase.ROUND_END
         self._previous_winner_id = winner_id
 
-        # Clear per-player last play records for next round
-        self._player_last_plays = {}
-        self._player_last_actions = {}
-
         result = {
             "success": True,
             "phase": self._phase.value,
@@ -780,6 +799,7 @@ class GameStateManager:
                 "phase": self._phase.value,
                 "winner_id": last["winner_id"],
                 "scores": {p["player_id"]: p["score"] for p in self._players},
+                "score_deltas": last.get("score_deltas", {}),
                 "is_declaration_game": last["is_declaration_game"],
                 "declarer_id": last.get("declarer_id"),
             }
@@ -795,6 +815,10 @@ class GameStateManager:
             {"success": bool, "phase": str, ...}
         """
         self._require_phase(GamePhase.ROUND_END)
+
+        # Clear per-player last play records for the new round
+        self._player_last_plays = {}
+        self._player_last_actions = {}
 
         self._round_number += 1
         self._phase = GamePhase.DEALING
