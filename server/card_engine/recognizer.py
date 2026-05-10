@@ -28,9 +28,10 @@ class PatternType(Enum):
     CONSECUTIVE_PAIRS = 3  # 连对
     STRAIGHT = 4           # 顺子
     TRIPLE_WITH_TWO = 5    # 三带二
-    BOMB = 6               # 炸弹
-    FOUR_WITH_THREE = 7    # 四带三
-    ACE_BOMB = 8           # A炸
+    AIRPLANE = 6           # 飞机带翅膀
+    BOMB = 7               # 炸弹
+    FOUR_WITH_THREE = 8    # 四带三
+    ACE_BOMB = 9           # A炸
 
 
 # Friendly Chinese display names for pattern types
@@ -40,6 +41,7 @@ _PATTERN_DISPLAY: dict[PatternType, str] = {
     PatternType.CONSECUTIVE_PAIRS: "连对",
     PatternType.STRAIGHT: "顺子",
     PatternType.TRIPLE_WITH_TWO: "三带二",
+    PatternType.AIRPLANE: "飞机带翅膀",
     PatternType.BOMB: "炸弹",
     PatternType.FOUR_WITH_THREE: "四带三",
     PatternType.ACE_BOMB: "A炸",
@@ -202,6 +204,45 @@ def identify(
                     length=3,
                     kicker_count=2,
                 )
+
+    # ── AIRPLANE (飞机带翅膀) ──────────────────────────────────
+    # Requirements:
+    #   - 2+ consecutive triples (ranks with ≥3 occurrences)
+    #   - No TWO (15) allowed in triples
+    #   - Normal play: exactly 2 kickers per triple
+    #   - Last hand: at most 2 kickers per triple
+    #   - Example: 333444 + 散牌x4 = 飞机带翅膀 (2 triples, 4 kickers)
+    triple_ranks = sorted(
+        r for r, c in rank_freq.items() if c >= 3 and r != Rank.TWO.value
+    )
+    if len(triple_ranks) >= 2:
+        # Find consecutive sequences of triples
+        for start in range(len(triple_ranks)):
+            for end in range(start + 1, len(triple_ranks)):
+                segment = triple_ranks[start:end + 1]
+                if any(segment[i + 1] - segment[i] != 1 for i in range(len(segment) - 1)):
+                    continue
+                triple_count = len(segment)
+                required_kickers = triple_count * 2
+                # Core cards: 3 per triple rank
+                core_count = triple_count * 3
+                kicker_count = total - core_count
+                if is_last_hand:
+                    if 0 <= kicker_count <= required_kickers:
+                        return CardPattern(
+                            type=PatternType.AIRPLANE,
+                            main_rank=segment[-1],
+                            length=triple_count,
+                            kicker_count=kicker_count,
+                        )
+                else:
+                    if kicker_count == required_kickers:
+                        return CardPattern(
+                            type=PatternType.AIRPLANE,
+                            main_rank=segment[-1],
+                            length=triple_count,
+                            kicker_count=kicker_count,
+                        )
 
     # ── STRAIGHT (顺子) ─────────────────────────────────────────
     # Requirements:

@@ -10,13 +10,14 @@ import type { CardPlay } from '../types/game'
 type PatternType =
   | 'single' | 'pair' | 'triple'
   | 'triple_with_two' | 'straight' | 'consecutive_pairs'
+  | 'airplane'
   | 'bomb' | 'ace_bomb' | 'four_with_three'
 
 interface PatternInfo {
   type: PatternType
   mainRank: Rank
   mainValue: number    // numeric rank for comparison
-  length: number       // card count (e.g. 5 for straight, 6 for consecutive_pairs)
+  length: number       // card count (except airplane = number of triples)
 }
 
 // ====================================================================
@@ -69,6 +70,28 @@ function identify(cards: Card[]): PatternInfo | null {
       }
       if (bigger.count === 4 && smaller.count === 3 && n === 7) {
         return { type: 'four_with_three', mainRank: bigger.rank, mainValue: bigger.value, length: 7 }
+      }
+    }
+  }
+
+  // ── AIRPLANE (飞机带翅膀) ──────────────────────────────────────
+  // 2+ consecutive triples, no TWO, need 2 kickers per triple
+  if (n >= 8) {
+    const tripRanks = rankCounts
+      .filter((r) => r.count >= 3 && r.value !== RANK_VALUE[Rank.TWO])
+      .map((r) => r.value)
+    if (tripRanks.length >= 2) {
+      for (let s = 0; s < tripRanks.length; s++) {
+        for (let e = s + 1; e < tripRanks.length; e++) {
+          const seg = tripRanks.slice(s, e + 1)
+          if (seg[seg.length - 1] - seg[0] !== seg.length - 1) continue
+          const tripleCount = seg.length
+          const coreCards = tripleCount * 3
+          const kickers = n - coreCards
+          if (kickers === tripleCount * 2) {
+            return { type: 'airplane', mainRank: rankCounts.find((r) => r.value === seg[seg.length - 1])!.rank, mainValue: seg[seg.length - 1], length: tripleCount }
+          }
+        }
       }
     }
   }
@@ -156,6 +179,53 @@ function genFreePlays(sorted: Card[]): number[][] {
     }
   }
 
+  // Airplane (2+ consecutive triples, each needs 2 kickers)
+  const tripleRanks = groups
+    .filter(([r, cards]) => cards.length >= 3 && r !== Rank.TWO)
+    .map(([r]) => RANK_VALUE[r])
+    .sort((a, b) => a - b)
+  for (let start = 0; start < tripleRanks.length; start++) {
+    for (let end = start + 1; end < tripleRanks.length; end++) {
+      const seg = tripleRanks.slice(start, end + 1)
+      if (seg[seg.length - 1] - seg[0] !== seg.length - 1) continue
+      const tripleCount = seg.length
+      const requiredKickers = tripleCount * 2
+      // Build core indices
+      const rankMap: Record<number, Rank> = {}
+      for (const c of sorted) rankMap[RANK_VALUE[c.rank]] = c.rank
+      const core: number[] = []
+      const usedRanks: Rank[] = []
+      for (const v of seg) {
+        const r = rankMap[v]
+        const idxs = indicesOfRank(sorted, r)
+        core.push(...idxs.slice(0, 3))
+        usedRanks.push(r)
+      }
+      // Find kickers (any cards not in core ranks)
+      const kickers: number[] = []
+      for (let i = 0; i < sorted.length && kickers.length < requiredKickers; i++) {
+        if (!usedRanks.includes(sorted[i].rank)) kickers.push(i)
+      }
+      if (kickers.length >= requiredKickers) {
+        plays.push([...core, ...kickers.slice(0, requiredKickers)])
+      }
+    }
+  }
+
+  // Four + Three (四带三)
+  for (const [rank, cards] of groups) {
+    if (cards.length === 4) {
+      const four = cards.map((c) => sorted.indexOf(c)).slice(0, 4)
+      const kickers: number[] = []
+      for (let i = 0; i < sorted.length && kickers.length < 3; i++) {
+        if (sorted[i].rank !== rank) kickers.push(i)
+      }
+      if (kickers.length >= 3) {
+        plays.push([...four, ...kickers.slice(0, 3)])
+      }
+    }
+  }
+
   // Straights (5+ consecutive, no 2)
   const vals = [...new Set(sorted.filter((c) => c.rank !== Rank.TWO).map((c) => RANK_VALUE[c.rank]))].sort((a, b) => a - b)
   for (let len = 5; len <= vals.length; len++) {
@@ -175,7 +245,7 @@ function genFreePlays(sorted: Card[]): number[][] {
     }
   }
 
-  // Consecutive pairs (3+ consecutive pairs, no 2)
+  // Consecutive pairs (2+ consecutive pairs, no 2)
   const pairVals: number[] = []
   for (const [rank, cards] of groups) {
     if (cards.length >= 2 && rank !== Rank.TWO) {
@@ -183,7 +253,7 @@ function genFreePlays(sorted: Card[]): number[][] {
     }
   }
   pairVals.sort((a, b) => a - b)
-  for (let len = 3; len <= pairVals.length; len++) {
+  for (let len = 2; len <= pairVals.length; len++) {
     for (let start = 0; start + len <= pairVals.length; start++) {
       const seg = pairVals.slice(start, start + len)
       if (seg[seg.length - 1] - seg[0] !== len - 1) continue
@@ -283,11 +353,12 @@ function genBeating(sorted: Card[], target: PatternInfo): number[][] {
           for (let i = 0; i < sorted.length && kickers.length < 2; i++) {
             if (sorted[i].rank !== rank) kickers.push(i)
           }
-          // Always offer at least the triple alone (last hand: 三带零)
-          // Then add kickers if available
-          plays.push([...triple])
-          if (kickers.length >= 1) plays.push([...triple, ...kickers.slice(0, 1)])
-          if (kickers.length >= 2) plays.push([...triple, ...kickers.slice(0, 2)])
+          // Only 5-card plays (三带二) can beat another 三带二.
+          // Plain triple (3 cards) would be identified as 'triple', not 'triple_with_two',
+          // and the server would reject it (cross-type can't beat).
+          if (kickers.length >= 2) {
+            plays.push([...triple, ...kickers.slice(0, 2)])
+          }
         }
       }
       break
@@ -300,11 +371,42 @@ function genBeating(sorted: Card[], target: PatternInfo): number[][] {
           for (let i = 0; i < sorted.length && kickers.length < 3; i++) {
             if (sorted[i].rank !== rank) kickers.push(i)
           }
-          // Always offer at least the four alone (last hand: 四带零)
-          plays.push([...four])
-          for (let k = 1; k <= Math.min(kickers.length, 3); k++) {
-            plays.push([...four, ...kickers.slice(0, k)])
+          // Only 7-card plays (四带三) can beat another 四带三.
+          if (kickers.length >= 3) {
+            plays.push([...four, ...kickers.slice(0, 3)])
           }
+        }
+      }
+      break
+    }
+    case 'airplane': {
+      const neededTriples = target.length
+      // Find consecutive triple sequences of same length
+      const tripleRanks = groups
+        .filter(([r, cards]) => cards.length >= 3 && r !== Rank.TWO)
+        .map(([r]) => RANK_VALUE[r])
+        .sort((a, b) => a - b)
+      for (let s = 0; s + neededTriples <= tripleRanks.length; s++) {
+        const seg = tripleRanks.slice(s, s + neededTriples)
+        if (seg[seg.length - 1] - seg[0] !== neededTriples - 1) continue
+        if (seg[0] <= target.mainValue) continue // not higher
+        // Build core indices
+        const rankMap: Record<number, Rank> = {}
+        for (const c of sorted) rankMap[RANK_VALUE[c.rank]] = c.rank
+        const core: number[] = []
+        const usedRanks: Rank[] = []
+        for (const v of seg) {
+          const r = rankMap[v]
+          core.push(...pickRank(sorted, r, 3))
+          usedRanks.push(r)
+        }
+        const requiredKickers = neededTriples * 2
+        const kickers: number[] = []
+        for (let i = 0; i < sorted.length && kickers.length < requiredKickers; i++) {
+          if (!usedRanks.includes(sorted[i].rank)) kickers.push(i)
+        }
+        if (kickers.length >= requiredKickers) {
+          plays.push([...core, ...kickers.slice(0, requiredKickers)])
         }
       }
       break

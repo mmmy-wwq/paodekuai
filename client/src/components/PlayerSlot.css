@@ -134,6 +134,34 @@
   color: var(--suit-red);
 }
 
+/* ── Declaration status (包牌阶段) ─────────────────────────── */
+
+.ps-decl-status {
+  text-align: center;
+  font-size: 13px;
+  font-weight: 600;
+  padding: 6px 10px;
+  border-radius: 6px;
+  background: rgba(0, 0, 0, 0.2);
+  min-width: 80px;
+}
+.ps-decl-text {
+  white-space: nowrap;
+}
+.ps-decl-status--turn {
+  background: rgba(200, 150, 46, 0.2);
+  border: 1px solid var(--accent-gold);
+  animation: ps-prompt-pulse 1.2s ease-in-out infinite;
+}
+.ps-decl-status--yes {
+  background: rgba(46, 200, 100, 0.15);
+  border: 1px solid rgba(46, 200, 100, 0.3);
+}
+.ps-decl-status--no {
+  background: rgba(196, 69, 54, 0.15);
+  border: 1px solid rgba(196, 69, 54, 0.25);
+}
+
 /* ── Card count: back face with number ──────────────────────── */
 
 .ps-card-back-icon {

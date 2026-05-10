@@ -260,17 +260,23 @@ class TestDetermineFirstPlayer:
     """Tests for RuleEngine.determine_first_player()."""
 
     def test_spade3_holder_goes_first_3p(self, engine_3p):
-        """In first round 3p, player holding ♠3 goes first."""
+        """3p：每局都是黑桃三持有人先出。"""
         players = [
             {"player_id": "p0", "hand": [c("FOUR", "SPADE"), c("FIVE", "HEART")]},
             {"player_id": "p1", "hand": [c("THREE", "SPADE"), c("KING", "DIAMOND")]},
             {"player_id": "p2", "hand": [c("ACE", "HEART"), c("TWO", "CLUB")]},
         ]
+        # 第一局
         idx = engine_3p.determine_first_player(players, round_number=1)
-        assert idx == 1  # p1 has ♠3
+        assert idx == 1  # p1 有黑桃三
+        # 第二局(round_number > 1) — 3p 仍然黑桃三先出，不是赢家
+        idx = engine_3p.determine_first_player(
+            players, round_number=2, previous_winner_id="p2"
+        )
+        assert idx == 1, f"3p第二局应是黑桃三先出(p1), 实际={idx}"
 
     def test_spade3_holder_goes_first_4p(self, engine_4p):
-        """In first round 4p, player holding ♠3 goes first."""
+        """4p：每局都是黑桃三持有人先出。"""
         players = [
             {"player_id": "p0", "hand": [c("FOUR", "SPADE")]},
             {"player_id": "p1", "hand": [c("SEVEN", "HEART")]},
@@ -278,19 +284,25 @@ class TestDetermineFirstPlayer:
             {"player_id": "p3", "hand": [c("NINE", "DIAMOND")]},
         ]
         idx = engine_4p.determine_first_player(players, round_number=1)
-        assert idx == 2  # p2 has ♠3
+        assert idx == 2  # p2 有黑桃三
 
-    def test_winner_leads_subsequent_round(self, engine_3p):
-        """In round > 1, the previous winner leads."""
+    def test_2p_winner_leads_subsequent_round(self, engine_3p):
+        """2p：后续回合赢家先出。"""
+        engine_2p = RuleEngine(RuleConfig(
+            player_count=2, deck_size=32, cards_per_player=16,
+        ))
         players = [
-            {"player_id": "p0", "hand": [c("THREE", "SPADE")]},
+            {"player_id": "p0", "hand": [c("FOUR", "SPADE")]},
             {"player_id": "p1", "hand": [c("FIVE", "HEART")]},
-            {"player_id": "p2", "hand": [c("ACE", "CLUB")]},
         ]
-        idx = engine_3p.determine_first_player(
-            players, round_number=2, previous_winner_id="p2"
+        # 第一局是随机
+        idx_r1 = engine_2p.determine_first_player(players, round_number=1)
+        assert idx_r1 in (0, 1)
+        # 第二局赢家先出
+        idx = engine_2p.determine_first_player(
+            players, round_number=2, previous_winner_id="p1"
         )
-        assert idx == 2
+        assert idx == 1
 
     def test_2p_first_round_random(self, engine_3p):
         """In 2-player first round, result is either 0 or 1 (random)."""

@@ -110,7 +110,7 @@ function GameRoom() {
   } = useGameWebSocket(id || '', playerName, playerCount)
 
   // ── Sound effects ──────────────────────────────────────────
-  const { playCardSound, playPassSound } = useSoundEffects()
+  const { playCardSound, playPassSound, speakPattern } = useSoundEffects()
   const prevTurnRef = useRef(0)
   const prevActionsRef = useRef<Record<string, string | null>>({})
 
@@ -169,6 +169,8 @@ function GameRoom() {
         const prev = prevActionsRef.current[pid]
         if (action !== prev && action === 'play') {
           playCardSound()
+          const playedCards = (gameState.player_last_plays?.[pid]?.cards) || []
+          if (playedCards.length > 0) speakPattern(playedCards)
           break
         } else if (action !== prev && action === 'pass') {
           playPassSound()
@@ -199,6 +201,20 @@ function GameRoom() {
   const totalDealCards = myHand.length + opponentCardCounts.reduce((a, b) => a + b, 0)
   const isMyTurn = gameState?.current_turn === myPlayerId
   const isDeclarationMyTurn = gameState?.declaration_turn_player_id === myPlayerId
+
+  // ── DECLARATION: track all declared + 2s delay ──────────────
+  const allDeclaredPlayers = phase === 'DECLARATION' && players.length > 0 &&
+    players.every((p) => p.declaration !== undefined && p.declaration !== null)
+  const [declDone, setDeclDone] = useState(false)
+  useEffect(() => {
+    if (allDeclaredPlayers && !declDone) {
+      setDeclDone(true)
+      const timer = setTimeout(() => setDeclDone(true), 2000)
+      return () => clearTimeout(timer)
+    } else if (phase !== 'DECLARATION') {
+      setDeclDone(false)
+    }
+  }, [phase, allDeclaredPlayers, declDone])
 
   // ── Local countdown: decrement every second ─────────────────
   useEffect(() => {
@@ -235,7 +251,7 @@ function GameRoom() {
   // ── Position mapping for PLAYING / ROUND_END phase ──────────
   // Counter-clockwise from me: me → right → top → left (4p)
   const playerPositions = useMemo(() => {
-    if (!gameState || (phase !== 'PLAYING' && phase !== 'ROUND_END')) return {}
+    if (!gameState || (phase !== 'PLAYING' && phase !== 'ROUND_END' && phase !== 'DECLARATION')) return {}
     const myIdx = players.findIndex((p) => p.player_id === myPlayerId)
     if (myIdx < 0) return {}
     const total = players.length
@@ -312,18 +328,6 @@ function GameRoom() {
       sendDeclare(isDeclaring)
     },
     [sendDeclare],
-  )
-
-  const declarationTurnPlayer = useMemo(() => {
-    if (phase !== 'DECLARATION' || !gameState) return null
-    const pid = gameState.declaration_turn_player_id
-    if (!pid) return null
-    return players.find((p) => p.player_id === pid) || null
-  }, [phase, gameState?.declaration_turn_player_id, players])
-
-  const allDeclared = useMemo(
-    () => players.every((p) => p.declaration !== undefined && p.declaration !== null),
-    [players],
   )
 
   const canPlay = selectedCardIds.size > 0 && isMyTurn && phase === 'PLAYING'
@@ -460,7 +464,12 @@ function GameRoom() {
             )
           })}
 
-          {/* Center area — cards/countdown are in each player's slot */}
+          {/* Center turn indicator */}
+          <div className="game-table__center-indicator">
+            <span className="game-table__turn-label">
+              {isMyTurn ? '🔔 轮到你了' : `⏳ ${turnPlayerName} 出牌`}
+            </span>
+          </div>
 
           {/* Center top info bar */}
           <div className="game-table__info">
@@ -568,30 +577,9 @@ function GameRoom() {
           cards={myHand}
           selectedIds={selectedCardIds}
           onToggleSelect={handleToggleSelect}
-          disabled={!isMyTurn}
+           disabled={!isMyTurn}
         />
       </div>
-
-      {/* Side buttons for DECLARATION phase */}
-      {phase === 'DECLARATION' && isDeclarationMyTurn && !allDeclared && createPortal(
-        <>
-          <div className="action-side action-side--left action-side--decl">
-            <div className="action-side__body">
-              <button className="btn-action btn-action--primary" onClick={() => handleDeclare(true)}>
-                是，包牌
-              </button>
-            </div>
-          </div>
-          <div className="action-side action-side--right action-side--decl">
-            <div className="action-side__body">
-              <button className="btn-action btn-action--pass" onClick={() => handleDeclare(false)}>
-                否，不包
-              </button>
-            </div>
-          </div>
-        </>,
-        document.body
-      )}
 
       {renderOverlays()}
     </>
@@ -697,41 +685,94 @@ function GameRoom() {
   // =====================================================================
 
   if (phase === 'DECLARATION') {
-    const isMyDeclarationTurn = isDeclarationMyTurn && !allDeclared
-
-    const playAreaContent = isMyDeclarationTurn ? (
-      <div className="declare-modal">
-        <div className="declare-modal__box">
-          <h2 className="declare-modal__title">是否包牌？</h2>
-          <p className="declare-modal__desc">包牌后您必须先出完所有牌，若被他人先出完则包牌失败，计分翻倍。</p>
-        </div>
-      </div>
-    ) : (
-      <div className="declare-modal">
-        <div className="declare-modal__box">
-          <h2 className="declare-modal__title">包牌阶段</h2>
-          <p className="declare-modal__desc">
-            {declarationTurnPlayer ? `等待 ${declarationTurnPlayer.name} 选择是否包牌...` : '等待其他玩家选择...'}
-          </p>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', width: '100%' }}>
-            {players.map((p) => (
-              <div key={p.player_id} style={{ display: 'flex', justifyContent: 'space-between', padding: '4px 8px', background: 'rgba(255,255,255,0.06)', borderRadius: '4px', fontSize: '13px' }}>
-                <span style={{ color: 'var(--text-secondary)' }}>{p.name} {p.player_id === myPlayerId ? '(你)' : ''}</span>
-                <span>{p.declaration === true ? '✅ 包牌' : p.declaration === false ? '❌ 不包' : '⏳ 等待中'}</span>
-              </div>
-            ))}
+    const playerCount = players.length
+    const declPlayerId = gameState?.declaration_turn_player_id
+    const declName = players.find((p) => p.player_id === declPlayerId)?.name || '...'
+    const isMyDeclarationTurn = isDeclarationMyTurn && !allDeclaredPlayers
+    const declButtons = isMyDeclarationTurn && !allDeclaredPlayers && createPortal(
+      <>
+        <div className="action-side action-side--left action-side--decl">
+          <div className="action-side__body">
+            <button className="btn-action btn-action--primary" onClick={() => handleDeclare(true)}>
+              是，包牌
+            </button>
           </div>
         </div>
-      </div>
+        <div className="action-side action-side--right action-side--decl">
+          <div className="action-side__body">
+            <button className="btn-action btn-action--pass" onClick={() => handleDeclare(false)}>
+              否，不包
+            </button>
+          </div>
+        </div>
+      </>,
+      document.body
     )
 
-    return renderGameShell(playAreaContent)
-  }
+    // If all declared, show "游戏即将开始..." briefly
+    if (allDeclaredPlayers && declDone) {
+      return (
+        <>
+          <div className={`game-table game-table--${playerCount}p`}>
+            <div className="game-table__start-hint">
+              <span>游戏即将开始...</span>
+            </div>
+          </div>
+          {renderOverlays()}
+        </>
+      )
+    }
 
+    return (
+      <>
+        <div className={`game-table game-table--${playerCount}p`}>
+          {players.map((p) => {
+            const pos = playerPositions[p.player_id] || 'top'
+            return (
+              <PlayerSlot
+                key={p.player_id}
+                name={p.name}
+                cardCount={0}
+                isActive={false}
+                isDeclarer={p.is_declarer}
+                position={pos}
+                sessionScore={p.score}
+                declaration={p.declaration ?? null}
+                isDeclarationTurn={p.player_id === declPlayerId}
+              />
+            )
+          })}
+
+          {/* Center turn indicator */}
+          <div className="game-table__center-indicator">
+            <span className="game-table__turn-label">
+              {isMyDeclarationTurn && !allDeclaredPlayers
+                ? '🔔 轮到你选择'
+                : `⏳ ${declName} 选择是否包牌`}
+            </span>
+            {!allDeclaredPlayers && (
+              <div className="game-table__turn-info">
+                <span className="game-table__turn-desc">包牌者必须先出完所有牌</span>
+              </div>
+            )}
+          </div>
+
+          <HandArea
+            cards={myHand}
+            selectedIds={selectedCardIds}
+            onToggleSelect={() => {}}
+            disabled={true}
+          />
+        </div>
+
+        {declButtons}
+        {renderOverlays()}
+      </>
+    )
+  }
   // =====================================================================
   // ROUND_END Phase — game table background + result overlay
   // =====================================================================
-
   if (phase === 'ROUND_END') {
     const result = roundResult
     const scoreDeltas = result?.score_deltas || {}

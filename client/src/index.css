@@ -39,7 +39,7 @@ body {
     /* Warm tone overlay */
     linear-gradient(rgba(44, 24, 16, 0.35), rgba(44, 24, 16, 0.35)),
     /* Ink bamboo background image */
-    url('/墨竹.jpg') center/cover no-repeat fixed;
+    url('/背景图.jpg') center/cover no-repeat fixed;
   color: var(--text-primary);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
@@ -217,7 +217,66 @@ input {
   50% { opacity: 0.7; transform: scale(1.05); }
 }
 
+/* ── Center turn indicator (declaration + playing) ──────────── */
+
+.game-table__center-indicator {
+  position: absolute;
+  top: 42%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 30;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  pointer-events: none;
+}
+.game-table__turn-label {
+  font-size: 20px;
+  font-weight: 800;
+  color: var(--accent-gold-light);
+  text-shadow: 0 0 20px rgba(200, 150, 46, 0.6), 0 2px 8px rgba(0, 0, 0, 0.7);
+  letter-spacing: 2px;
+  white-space: nowrap;
+}
+.game-table__turn-info {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.game-table__turn-desc {
+  font-size: 12px;
+  color: var(--text-secondary);
+  opacity: 0.7;
+  white-space: nowrap;
+}
+
+/* ── Game start hint (after all declared) ───────────────────── */
+
+.game-table__start-hint {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 100;
+  font-size: 22px;
+  font-weight: 800;
+  color: var(--accent-gold-light);
+  text-shadow: 0 0 20px rgba(200, 150, 46, 0.6), 0 2px 8px rgba(0, 0, 0, 0.7);
+  letter-spacing: 4px;
+  animation: ps-prompt-pulse 1.2s ease-in-out infinite;
+}
+
 /* Forced landscape */
+html.force-landscape .game-table__center-indicator {
+  top: 38%;
+}
+html.force-landscape .game-table__turn-label {
+  font-size: 16px;
+}
+html.force-landscape .game-table__start-hint {
+  font-size: 18px;
+}
 html.force-landscape .game-table__center-play {
   min-width: 80px;
   min-height: 40px;
@@ -403,10 +462,10 @@ html.force-landscape .gt-countdown {
 
 /* Action buttons */
 .btn-action {
-  padding: 10px 24px;
-  border-radius: 8px;
+  padding: 14px 32px;
+  border-radius: 10px;
   border: none;
-  font-size: 15px;
+  font-size: 18px;
   font-weight: 700;
   letter-spacing: 1px;
   transition: transform 0.1s ease, box-shadow 0.15s ease;
@@ -429,26 +488,26 @@ html.force-landscape .gt-countdown {
 }
 
 .btn-action--pass {
-  background: rgba(196, 181, 160, 0.15);
-  color: var(--text-secondary);
-  border: 1px solid rgba(196, 181, 160, 0.25);
+  background: rgba(196, 69, 54, 0.2);
+  color: var(--suit-red);
+  border: 1px solid rgba(196, 69, 54, 0.35);
   text-shadow: 0 1px 3px rgba(0, 0, 0, 0.6);
   backdrop-filter: blur(4px);
 }
 
 .btn-action--pass:hover:not(:disabled) {
-  background: rgba(196, 181, 160, 0.1);
+  background: rgba(196, 69, 54, 0.15);
 }
 
 .btn-action--hint {
-  background: rgba(0, 0, 0, 0.35);
-  color: var(--accent-gold-light);
-  border: 1px solid var(--accent-gold);
+  background: rgba(70, 130, 180, 0.2);
+  color: #7ab8e0;
+  border: 1px solid rgba(70, 130, 180, 0.4);
   text-shadow: 0 1px 3px rgba(0, 0, 0, 0.6);
 }
 
 .btn-action--hint:hover:not(:disabled) {
-  background: rgba(200, 150, 46, 0.12);
+  background: rgba(70, 130, 180, 0.12);
 }
 
 .btn-action:disabled {
@@ -978,7 +1037,7 @@ html.force-landscape #root::before {
     /* Warm tone overlay */
     linear-gradient(rgba(44, 24, 16, 0.35), rgba(44, 24, 16, 0.35)),
     /* Ink bamboo background image */
-    url('/墨竹.jpg') center/cover no-repeat fixed;
+    url('/背景图.jpg') center/cover no-repeat fixed;
   z-index: -1;
 }
 
@@ -1041,6 +1100,15 @@ html.force-landscape body {
 /* ── Declaration buttons: slightly higher ── */
 .action-side--decl {
   top: 35% !important;
+}
+/* "不包" button in declaration gets its own color to distinguish from "不要" */
+.action-side--decl .btn-action--pass {
+  background: rgba(180, 130, 50, 0.25);
+  color: var(--accent-gold-light);
+  border: 1px solid rgba(200, 150, 46, 0.4);
+}
+.action-side--decl .btn-action--pass:hover:not(:disabled) {
+  background: rgba(200, 150, 46, 0.15);
 }
 
 /* ── Forced landscape (CSS rotation active) ── */
@@ -1106,6 +1174,7 @@ html.force-landscape .game-layout__play-area > * {
 }
 
 /* Round-end overlay rotated 90° to match landscape game orientation */
-html.force-landscape .round-end-overlay__box {
+/* Apply to parent (not __box) to avoid conflict with phase-enter animation */
+html.force-landscape .round-end-overlay {
   transform: rotate(90deg);
 }

@@ -287,6 +287,166 @@ class TestIdentifyFourWithThree:
 
 
 # ═══════════════════════════════════════════════════════════════════════
+# AIRPLANE (飞机带翅膀)
+# ═══════════════════════════════════════════════════════════════════════
+
+class TestIdentifyAirplane:
+    """Tests for AIRPLANE pattern recognition."""
+
+    def test_airplane_2_triples_recognized(self):
+        """2 consecutive triples + 4 kickers = AIRPLANE."""
+        cards = [
+            c("THREE", "SPADE"), c("THREE", "HEART"), c("THREE", "CLUB"),
+            c("FOUR", "SPADE"), c("FOUR", "HEART"), c("FOUR", "CLUB"),
+            c("SEVEN", "SPADE"), c("SEVEN", "HEART"),
+            c("EIGHT", "SPADE"), c("EIGHT", "HEART"),
+        ]
+        result = identify(cards, player_count=3)
+        assert result is not None
+        assert result.type == PatternType.AIRPLANE
+        assert result.main_rank == Rank.FOUR.value
+        assert result.length == 2
+        assert result.kicker_count == 4
+
+    def test_airplane_3_triples_recognized(self):
+        """3 consecutive triples + 6 kickers = AIRPLANE."""
+        cards = [
+            c("FIVE", "SPADE"), c("FIVE", "HEART"), c("FIVE", "CLUB"),
+            c("SIX", "SPADE"), c("SIX", "HEART"), c("SIX", "CLUB"),
+            c("SEVEN", "SPADE"), c("SEVEN", "HEART"), c("SEVEN", "CLUB"),
+            c("NINE", "SPADE"), c("NINE", "HEART"),
+            c("TEN", "SPADE"), c("TEN", "HEART"),
+            c("JACK", "SPADE"), c("JACK", "HEART"),
+        ]
+        result = identify(cards, player_count=3)
+        assert result is not None
+        assert result.type == PatternType.AIRPLANE
+        assert result.main_rank == Rank.SEVEN.value
+        assert result.length == 3
+        assert result.kicker_count == 6
+
+    def test_airplane_single_triple_rejected(self):
+        """1 triple alone is not an airplane (need 2+ consecutive triples)."""
+        cards = [
+            c("THREE", "SPADE"), c("THREE", "HEART"), c("THREE", "CLUB"),
+            c("FIVE", "SPADE"), c("SIX", "HEART"),
+        ]
+        result = identify(cards, player_count=3)
+        # Should be identified as triple_with_two or other, not airplane
+        assert result is None or result.type != PatternType.AIRPLANE
+
+    def test_airplane_not_consecutive_rejected(self):
+        """Non-consecutive triples are not an airplane."""
+        cards = [
+            c("THREE", "SPADE"), c("THREE", "HEART"), c("THREE", "CLUB"),
+            c("FIVE", "SPADE"), c("FIVE", "HEART"), c("FIVE", "CLUB"),
+            c("EIGHT", "SPADE"), c("EIGHT", "HEART"),
+            c("NINE", "SPADE"), c("NINE", "HEART"),
+        ]
+        result = identify(cards, player_count=3)
+        assert result is None or result.type != PatternType.AIRPLANE
+
+    def test_airplane_with_two_rejected(self):
+        """TWO (2) cannot be part of airplane triples - triple with TWO is rejected."""
+        cards = [
+            c("THREE", "SPADE"), c("THREE", "HEART"), c("THREE", "CLUB"),
+            c("TWO", "SPADE"), c("TWO", "HEART"), c("TWO", "CLUB"),
+            c("SEVEN", "SPADE"), c("SEVEN", "HEART"),
+            c("EIGHT", "SPADE"), c("EIGHT", "HEART"),
+        ]
+        result = identify(cards, player_count=3)
+        # TWO (15) in triples means the triples aren't consecutive around TWO
+        # 3 and 15 are not consecutive, so no airplane
+        assert result is None or result.type != PatternType.AIRPLANE
+
+    def test_airplane_wrong_kicker_count_rejected(self):
+        """Wrong kicker count (not 2 per triple) is rejected."""
+        cards = [
+            c("THREE", "SPADE"), c("THREE", "HEART"), c("THREE", "CLUB"),
+            c("FOUR", "SPADE"), c("FOUR", "HEART"), c("FOUR", "CLUB"),
+            c("SEVEN", "SPADE"),  # Only 1 kicker for 2 triples (need 4)
+            c("EIGHT", "SPADE"),
+            c("NINE", "SPADE"),
+        ]
+        result = identify(cards, player_count=3)
+        assert result is None or result.type != PatternType.AIRPLANE
+
+    def test_airplane_with_fewer_kickers_last_hand(self):
+        """Last hand: airplane can have fewer kickers."""
+        cards = [
+            c("THREE", "SPADE"), c("THREE", "HEART"), c("THREE", "CLUB"),
+            c("FOUR", "SPADE"), c("FOUR", "HEART"), c("FOUR", "CLUB"),
+            c("SEVEN", "SPADE"), c("SEVEN", "HEART"),
+        ]
+        result = identify(cards, player_count=3, is_last_hand=True)
+        assert result is not None
+        assert result.type == PatternType.AIRPLANE
+        # 2 triples + 2 kickers is valid in last hand
+        assert result.length == 2
+        assert result.kicker_count == 2
+
+    def test_airplane_extra_cards_as_kickers(self):
+        """4 cards of triple rank: 3 used as triple, 1 as kicker."""
+        cards = [
+            c("THREE", "SPADE"), c("THREE", "HEART"), c("THREE", "CLUB"),
+            c("FOUR", "SPADE"), c("FOUR", "HEART"), c("FOUR", "CLUB"),
+            c("FOUR", "DIAMOND"),  # 4th four → kicker
+            c("SEVEN", "SPADE"), c("SEVEN", "HEART"),
+            c("EIGHT", "SPADE"), c("EIGHT", "HEART"),
+        ]  # 2 triples (333,444) + 4 kickers (4♦,7♠,7♥,8♠,8♥ → wait that's 5)
+        # Fix: 2 triples = 6 core, need 4 kickers, total = 10
+        cards = [
+            c("THREE", "SPADE"), c("THREE", "HEART"), c("THREE", "CLUB"),
+            c("FOUR", "SPADE"), c("FOUR", "HEART"), c("FOUR", "CLUB"),
+            c("FOUR", "DIAMOND"),  # 4th four → kicker
+            c("SEVEN", "SPADE"), c("SEVEN", "HEART"),
+            c("EIGHT", "SPADE"),
+        ]  # total 10: 2 triples + 4 kickers (4♦,7♠,7♥,8♠)
+        result = identify(cards, player_count=3)
+        assert result is not None
+        assert result.type == PatternType.AIRPLANE
+        assert result.length == 2
+        assert result.kicker_count == 4
+
+    def test_airplane_last_hand_zero_kickers(self):
+        """Last hand: bare airplane with 0 kickers."""
+        cards = [
+            c("THREE", "SPADE"), c("THREE", "HEART"), c("THREE", "CLUB"),
+            c("FOUR", "SPADE"), c("FOUR", "HEART"), c("FOUR", "CLUB"),
+        ]  # 2 triples, 0 kickers
+        result = identify(cards, player_count=3, is_last_hand=True)
+        assert result is not None
+        assert result.type == PatternType.AIRPLANE
+        assert result.length == 2
+        assert result.kicker_count == 0
+
+    def test_airplane_ace_high(self):
+        """ACE-high airplane (QQQKKK) is valid (13,14 consecutive)."""
+        cards = [
+            c("QUEEN", "SPADE"), c("QUEEN", "HEART"), c("QUEEN", "CLUB"),
+            c("KING", "SPADE"), c("KING", "HEART"), c("KING", "CLUB"),
+            c("THREE", "SPADE"), c("THREE", "HEART"),
+            c("FIVE", "SPADE"), c("FIVE", "HEART"),
+        ]  # QQQ+KKK + 4 kickers = 10 cards
+        result = identify(cards, player_count=3)
+        assert result is not None
+        assert result.type == PatternType.AIRPLANE
+        # main_rank should be KING (higher of the two triples)
+        assert result.main_rank == Rank.KING.value
+        assert result.length == 2
+        assert result.kicker_count == 4
+
+    def test_airplane_rejected_normal_bare_triples(self):
+        """Normal mode: bare triples without kickers rejected."""
+        cards = [
+            c("THREE", "SPADE"), c("THREE", "HEART"), c("THREE", "CLUB"),
+            c("FOUR", "SPADE"), c("FOUR", "HEART"), c("FOUR", "CLUB"),
+        ]  # 2 triples, 0 kickers
+        result = identify(cards, player_count=3, is_last_hand=False)
+        assert result is None or result.type != PatternType.AIRPLANE
+
+
+# ═══════════════════════════════════════════════════════════════════════
 # BOMB (炸弹)
 # ═══════════════════════════════════════════════════════════════════════
 

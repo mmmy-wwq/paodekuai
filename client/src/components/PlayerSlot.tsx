@@ -20,6 +20,10 @@ interface PlayerSlotProps {
   historicalScore?: number
   /** Remaining hand cards to reveal (ROUND_END) */
   remainingCards?: CardType[]
+  /** Declaration phase: player's choice (true=包牌, false=不包, null=未选) */
+  declaration?: boolean | null
+  /** Declaration phase: this player is currently choosing */
+  isDeclarationTurn?: boolean
 }
 
 /** Mini-card used inside opponent last-play display. */
@@ -43,7 +47,7 @@ function avatarSizeFor(position: string): number {
 }
 
 /** Renders a single player's slot: avatar, name, scores, play area. */
-function PlayerSlot({ name, cardCount, isActive, isDeclarer, position, lastPlay, lastAction, isMyTurn = false, countdown, sessionScore, historicalScore, remainingCards }: PlayerSlotProps) {
+function PlayerSlot({ name, cardCount, isActive, isDeclarer, position, lastPlay, lastAction, isMyTurn = false, countdown, sessionScore, historicalScore, remainingCards, declaration, isDeclarationTurn }: PlayerSlotProps) {
   const avatarSize = avatarSizeFor(position)
   // Layout direction: play area should face the table center
   const layoutClass = 
@@ -54,9 +58,21 @@ function PlayerSlot({ name, cardCount, isActive, isDeclarer, position, lastPlay,
 
   const isMe = position === 'me'
 
-  // Determine play area content
+  // Determine play area content (normal game or declaration phase)
   let playContent: React.ReactNode = null
-  if (lastAction === 'pass') {
+
+  // ── Declaration phase ──────────────────────────────────────
+  if (declaration !== undefined) {
+    let declText = '⏳ 选择中'
+    if (declaration === true) declText = '✅ 包牌'
+    else if (declaration === false) declText = '❌ 不包'
+    const isDeclTurn = isDeclarationTurn && declaration === null
+    playContent = (
+      <div className={`ps-decl-status${isDeclTurn ? ' ps-decl-status--turn' : ''}${declaration === true ? ' ps-decl-status--yes' : ''}${declaration === false ? ' ps-decl-status--no' : ''}`}>
+        <span className="ps-decl-text">{declText}</span>
+      </div>
+    )
+  } else if (lastAction === 'pass') {
     playContent = <span className="ps-play-pass">过</span>
   } else if (!isActive && lastPlay && lastAction === 'play') {
     playContent = (

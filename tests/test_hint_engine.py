@@ -226,6 +226,49 @@ class TestHintTripleWithTwo:
         # 3x7 alone can't beat 555+34 (cross-type)
         assert len(plays) == 0
 
+    def test_higher_triple_two_requires_exactly_2_kickers(self, engine_3p):
+        """手牌只有较高三条+1张其余牌 → 不能形成三带二(需要正好2踢脚)。"""
+        hand = [c('SEVEN', S), c('SEVEN', H), c('SEVEN', C),
+                c('EIGHT', D)]  # 只有1张踢脚
+        last = identify([c('FIVE', S), c('FIVE', H), c('FIVE', C),
+                         c('THREE', S), c('FOUR', H)])
+        plays = engine_3p.get_legal_plays(hand, last_play_pattern=last, player_count=3)
+        # 777+8 只有4张，不能形成三带二(需要5张)
+        triple_two = [p for p in plays if len(p) == 5]
+        assert len(triple_two) == 0, "只有1张踢脚不应生成三带二"
+        # 但可能有炸弹
+        if any(len(p) == 4 for p in plays):
+            pass  # 炸弹是可接受的
+
+    def test_higher_triple_two_only_5_card_plays(self, engine_3p):
+        """压三带二时只能出5张三带二，不能出3或4张。"""
+        hand = [c('SEVEN', S), c('SEVEN', H), c('SEVEN', C),
+                c('NINE', D), c('TEN', S)]
+        last = identify([c('FIVE', S), c('FIVE', H), c('FIVE', C),
+                         c('THREE', S), c('FOUR', H)])
+        plays = engine_3p.get_legal_plays(hand, last_play_pattern=last, player_count=3)
+        # 所有返回的牌型中，不能有长度为3或4的(纯三条/三条一带一)
+        invalid = [p for p in plays if len(p) == 3 or len(p) == 4]
+        assert len(invalid) == 0, f"不应包含3张或4张的play: {invalid}"
+        # 但应有5张三带二
+        valid = [p for p in plays if len(p) == 5]
+        assert len(valid) >= 1, "应有5张三带二"
+
+    def test_multiple_higher_triples_with_kickers(self, engine_3p):
+        """手牌有多个更高三条且有足够踢脚 → 返回所有三带二组合。"""
+        hand = [c('SEVEN', S), c('SEVEN', H), c('SEVEN', C),
+                c('NINE', S), c('NINE', H), c('NINE', C),
+                c('THREE', D), c('FOUR', S)]
+        last = identify([c('FIVE', S), c('FIVE', H), c('FIVE', C),
+                         c('THREE', S), c('FOUR', H)])
+        plays = engine_3p.get_legal_plays(hand, last_play_pattern=last, player_count=3)
+        # 应有777+XX和999+XX两种三带二(踢脚从剩余牌选)
+        triple_two = [p for p in plays if len(p) == 5]
+        seven_plays = [p for p in triple_two if any(c.rank == Rank.SEVEN for c in p)]
+        nine_plays = [p for p in triple_two if any(c.rank == Rank.NINE for c in p)]
+        assert len(seven_plays) >= 1, "应包含777三带二"
+        assert len(nine_plays) >= 1, "应包含999三带二"
+
 
 # ═══════════════════════════════════════════════════════════════════════
 # Test Case 6: Straight on table
@@ -376,7 +419,91 @@ class TestHintEdgeCases:
 
 
 # ═══════════════════════════════════════════════════════════════════════
-# Test Case 11: Hint ordering (smallest to largest on repeat clicks)
+# Test Case 11: Airplane hints
+# ═══════════════════════════════════════════════════════════════════════
+
+class TestHintAirplane:
+    """飞机带翅膀的提示测试。"""
+
+    def test_free_play_includes_airplane(self, engine_3p):
+        """自由出牌：提示应包含飞机带翅膀。"""
+        hand = [c('THREE', S), c('THREE', H), c('THREE', C),
+                c('FOUR', S), c('FOUR', H), c('FOUR', C),
+                c('SEVEN', S), c('SEVEN', H),
+                c('EIGHT', S), c('EIGHT', H)]
+        plays = engine_3p.get_legal_plays(hand, last_play_pattern=None, player_count=3)
+        airplane_plays = [p for p in plays if len(p) == 10]
+        assert len(airplane_plays) >= 1, "应包含飞机(2个三条+4踢脚)"
+
+    def test_higher_airplane_found_when_beating(self, engine_3p):
+        """三带二(555+34)在桌 → 提示应包含更大的飞机+炸弹。"""
+        hand = [c('FIVE', S), c('FIVE', H), c('FIVE', C),
+                c('SIX', S), c('SIX', H), c('SIX', C),
+                c('NINE', S), c('NINE', H),
+                c('TEN', S), c('TEN', H)]
+        last = identify([c('THREE', S), c('THREE', H), c('THREE', C),
+                         c('FOUR', S), c('FOUR', H), c('FOUR', C),
+                         c('SEVEN', S), c('SEVEN', H),
+                         c('EIGHT', S), c('EIGHT', H)],
+                        player_count=3)
+        assert last is not None and last.type == PatternType.AIRPLANE
+        assert last.main_rank == Rank.FOUR.value
+        plays = engine_3p.get_legal_plays(hand, last_play_pattern=last, player_count=3)
+        # 应包含 555+666+9+9+10+10 (更高同长度飞机)
+        airplane_plays = [p for p in plays if len(p) == 10]
+        assert len(airplane_plays) >= 1, f"应包含更高飞机, 结果: {plays}"
+        # 验证飞机的主牌面大于目标
+        for play in airplane_plays:
+            pat = identify(play, player_count=3)
+            assert pat is not None and pat.type == PatternType.AIRPLANE
+            assert pat.main_rank > last.main_rank
+
+    def test_no_airplane_when_wrong_length(self, engine_3p):
+        """不同长度的飞机不能压。"""
+        hand = [c('FIVE', S), c('FIVE', H), c('FIVE', C),
+                c('SIX', S), c('SIX', H), c('SIX', C),
+                c('SEVEN', S), c('SEVEN', H), c('SEVEN', C),
+                c('NINE', S), c('NINE', H),
+                c('TEN', S), c('TEN', H),
+                c('JACK', S), c('JACK', H)]  # 3个三条+6踢脚=15张
+        # 桌面是2个三条的飞机
+        last = identify([c('THREE', S), c('THREE', H), c('THREE', C),
+                         c('FOUR', S), c('FOUR', H), c('FOUR', C),
+                         c('SEVEN', S), c('SEVEN', H),
+                         c('EIGHT', S), c('EIGHT', H)],
+                        player_count=3)
+        assert last is not None and last.type == PatternType.AIRPLANE
+        assert last.length == 2
+        plays = engine_3p.get_legal_plays(hand, last_play_pattern=last, player_count=3)
+        # 手牌有3个三条的飞机(555+666+777)，但长度3≠2，不能压
+        # 不应包含长度为3的飞机(15张)
+        wrong_len = [p for p in plays if len(p) == 15]
+        assert len(wrong_len) == 0, f"不应包含15张飞机(长度不同): {wrong_len}"
+        # 但可能有炸弹
+        bombs = [p for p in plays if len(p) == 4]
+        # 炸弹是可接受的
+
+    def test_bomb_added_when_facing_airplane(self, engine_3p):
+        """面对飞机时，提示应包含炸弹。"""
+        hand = [c('THREE', S), c('THREE', H), c('THREE', C), c('THREE', D),
+                c('FIVE', S), c('FIVE', H)]
+        last = identify([c('SEVEN', S), c('SEVEN', H), c('SEVEN', C),
+                         c('EIGHT', S), c('EIGHT', H), c('EIGHT', C),
+                         c('JACK', S), c('JACK', H),
+                         c('QUEEN', S), c('QUEEN', H)],
+                        player_count=3)
+        assert last is not None and last.type == PatternType.AIRPLANE
+        plays = engine_3p.get_legal_plays(hand, last_play_pattern=last, player_count=3)
+        # 只有炸弹能压
+        bomb_plays = [p for p in plays if len(p) == 4]
+        assert len(bomb_plays) >= 1, f"应包含炸弹, 结果: {plays}"
+        # 不应包含非炸弹的牌型
+        non_bomb = [p for p in plays if len(p) != 4]
+        assert len(non_bomb) == 0, f"不应包含非炸弹: {non_bomb}"
+
+
+# ═══════════════════════════════════════════════════════════════════════
+# Test Case 12: Hint ordering (smallest to largest on repeat clicks)
 # ═══════════════════════════════════════════════════════════════════════
 
 class TestHintOrdering:
@@ -406,3 +533,165 @@ class TestHintOrdering:
         # The frontend hint engine sorts ascending for the cycle.
         # Here we just verify all valid singles are present.
         assert len(singles) == 4
+
+
+# ═══════════════════════════════════════════════════════════════════════
+# Test Case 13: Free play edge cases
+# ═══════════════════════════════════════════════════════════════════════
+
+class TestFreePlayAllPatternTypes:
+    """自由出牌应覆盖所有合法牌型。"""
+
+    def test_free_play_includes_four_with_three(self, engine_3p):
+        """自由出牌：包含四带三。"""
+        hand = [c('THREE', S), c('THREE', H), c('THREE', C), c('THREE', D),
+                c('FIVE', S), c('FIVE', H), c('FIVE', C),
+                c('SEVEN', S)]
+        plays = engine_3p.get_legal_plays(hand, last_play_pattern=None, player_count=3)
+        four_three = [p for p in plays if len(p) == 7]
+        assert len(four_three) >= 1, "应包含四带三"
+
+    def test_free_play_includes_2pair_consecutive_pairs(self, engine_3p):
+        """自由出牌：包含2连对(3344)。"""
+        hand = [c('THREE', S), c('THREE', H),
+                c('FOUR', S), c('FOUR', H),
+                c('SEVEN', S), c('EIGHT', H)]
+        plays = engine_3p.get_legal_plays(hand, last_play_pattern=None, player_count=3)
+        cp_plays = [p for p in plays if len(p) == 4]
+        assert len(cp_plays) >= 1, f"应包含2连对(4张), 结果: {plays}"
+
+    def test_free_play_includes_all_basic_types(self, engine_3p):
+        """手牌有各种牌型时全部列出。"""
+        hand = [c('THREE', S),
+                c('FOUR', S), c('FOUR', H),
+                c('FIVE', S), c('FIVE', H), c('FIVE', C),
+                c('SIX', S), c('SIX', H), c('SIX', C),
+                c('SEVEN', S), c('SEVEN', H),
+                c('EIGHT', S), c('EIGHT', H)]
+        plays = engine_3p.get_legal_plays(hand, last_play_pattern=None, player_count=3)
+        lengths = {len(p) for p in plays}
+        assert 1 in lengths, "应包含单张"
+        assert 2 in lengths, "应包含对子"
+        five_len = [p for p in plays if len(p) == 5]
+        assert len(five_len) >= 1, "应包含三带二"
+
+
+# ═══════════════════════════════════════════════════════════════════════
+# Test Case 14: Beating edge cases
+# ═══════════════════════════════════════════════════════════════════════
+
+class TestHintBeatingEdgeCases:
+    """压牌时的边界场景。"""
+
+    def test_four_with_three_beating(self, engine_3p):
+        """桌面有四带三(444+567) → 提示包含更高四带三或炸弹。"""
+        hand = [c('SEVEN', S), c('SEVEN', H), c('SEVEN', C), c('SEVEN', D),
+                c('NINE', S), c('NINE', H), c('NINE', C),
+                c('THREE', S)]
+        last = identify([c('FIVE', S), c('FIVE', H), c('FIVE', C), c('FIVE', D),
+                         c('SIX', S), c('SIX', H), c('SIX', C)],
+                        player_count=3)
+        assert last is not None and last.type == PatternType.FOUR_WITH_THREE
+        plays = engine_3p.get_legal_plays(hand, last_play_pattern=last, player_count=3)
+        four_three = [p for p in plays if len(p) == 7]
+        assert len(four_three) >= 1, f"应包含更高四带三, 结果: {plays}"
+
+    def test_four_with_three_only_7card_plays(self, engine_3p):
+        """压四带三：7张四带三或炸弹都可(炸弹合法)。"""
+        hand = [c('SEVEN', S), c('SEVEN', H), c('SEVEN', C), c('SEVEN', D),
+                c('NINE', S), c('NINE', H), c('NINE', C)]
+        last = identify([c('FIVE', S), c('FIVE', H), c('FIVE', C), c('FIVE', D),
+                         c('SIX', S), c('SIX', H), c('SIX', C)],
+                        player_count=3)
+        plays = engine_3p.get_legal_plays(hand, last_play_pattern=last, player_count=3)
+        # 应有7张四带三或4张炸弹(炸弹可压四带三)
+        has_seven = any(len(p) == 7 for p in plays)
+        has_bomb = any(len(p) == 4 for p in plays)
+        assert has_seven or has_bomb, f"应包含四带三或炸弹, 结果: {plays}"
+
+    def test_consecutive_pairs_2pair_beating(self, engine_3p):
+        """2连对在桌(3344) → 提示包含更高2连对。"""
+        hand = [c('FIVE', S), c('FIVE', H),
+                c('SIX', S), c('SIX', H)]
+        last = identify([c('THREE', S), c('THREE', H),
+                         c('FOUR', S), c('FOUR', H)],
+                        player_count=3)
+        assert last is not None and last.type == PatternType.CONSECUTIVE_PAIRS
+        plays = engine_3p.get_legal_plays(hand, last_play_pattern=last, player_count=3)
+        cp_plays = [p for p in plays if len(p) == 4]
+        assert len(cp_plays) >= 1, f"应包含5566, 结果: {plays}"
+
+    def test_consecutive_pairs_length_mismatch_no_beat(self, engine_3p):
+        """3连对(667788)不能压2连对(3344) — 长度必须相同。"""
+        hand = [c('SIX', S), c('SIX', H),
+                c('SEVEN', S), c('SEVEN', H),
+                c('EIGHT', S), c('EIGHT', H)]
+        last = identify([c('THREE', S), c('THREE', H),
+                         c('FOUR', S), c('FOUR', H)],
+                        player_count=3)
+        assert last is not None and last.type == PatternType.CONSECUTIVE_PAIRS
+        plays = engine_3p.get_legal_plays(hand, last_play_pattern=last, player_count=3)
+        # 667788是3连对，3344是2连对，长度不同不能压
+        long_cp = [p for p in plays if len(p) == 6]
+        assert len(long_cp) == 0, f"3连对(6张)不应能压2连对: {long_cp}"
+
+    def test_lower_pair_cannot_beat_higher(self, engine_3p):
+        """对7不能压对K。"""
+        hand = [c('SEVEN', S), c('SEVEN', H)]
+        last = identify([c('KING', S), c('KING', H)])
+        plays = engine_3p.get_legal_plays(hand, last_play_pattern=last, player_count=3)
+        assert len(plays) == 0, "对7不能压对K"
+
+    def test_only_higher_bombs_when_facing_bomb(self, engine_3p):
+        """桌面炸弹5 → 提示只返回更高炸弹或A炸(不含非炸弹)。"""
+        hand = [c('SEVEN', S), c('SEVEN', H), c('SEVEN', C), c('SEVEN', D),
+                c('ACE', S), c('ACE', H), c('ACE', C),
+                c('THREE', S)]
+        last = identify([c('FIVE', S), c('FIVE', H), c('FIVE', C), c('FIVE', D)])
+        plays = engine_3p.get_legal_plays(hand, last_play_pattern=last, player_count=3)
+        for play in plays:
+            pat = identify(play, player_count=3)
+            assert pat is not None
+            assert pat.type in (PatternType.BOMB, PatternType.ACE_BOMB), \
+                f"炸弹场景返回了非炸弹: {pat.type}"
+
+    def test_nothing_beats_ace_bomb_in_3p(self, engine_3p):
+        """3p模式：A炸(3个A)在桌 → 无牌能压(包括4条2也不够)。"""
+        hand = [c('TWO', S), c('TWO', H), c('TWO', C), c('TWO', D)]
+        last = identify([c('ACE', S), c('ACE', H), c('ACE', C)],
+                        player_count=3)
+        assert last is not None and last.type == PatternType.ACE_BOMB
+        plays = engine_3p.get_legal_plays(hand, last_play_pattern=last, player_count=3)
+        assert len(plays) == 0, "A炸不能被任何牌压"
+
+
+# ═══════════════════════════════════════════════════════════════════════
+# Test Case 15: Empty / no-op edge cases
+# ═══════════════════════════════════════════════════════════════════════
+
+class TestHintNoPlays:
+    """无可出牌时的边界场景。"""
+
+    def test_no_play_when_hand_all_lower(self, engine_3p):
+        """手牌全部小于桌面单张 → 空结果。"""
+        hand = [c('THREE', S), c('FOUR', H), c('FIVE', C)]
+        last = identify([c('ACE', S)])
+        plays = engine_3p.get_legal_plays(hand, last_play_pattern=last, player_count=3)
+        assert len(plays) == 0
+
+    def test_no_play_against_pair_when_no_pair_in_hand(self, engine_3p):
+        """手牌无对子时不能压桌面对子。"""
+        hand = [c('THREE', S), c('FIVE', H), c('SEVEN', C)]
+        last = identify([c('FOUR', S), c('FOUR', H)])
+        plays = engine_3p.get_legal_plays(hand, last_play_pattern=last, player_count=3)
+        assert len(plays) == 0
+
+    def test_no_play_when_only_lower_triple(self, engine_3p):
+        """手牌只有较低三条时不能压更高三带二。"""
+        hand = [c('THREE', S), c('THREE', H), c('THREE', C),
+                c('FIVE', D), c('SIX', S)]
+        last = identify([c('SEVEN', S), c('SEVEN', H), c('SEVEN', C),
+                         c('NINE', D), c('TEN', S)],
+                        player_count=3)
+        plays = engine_3p.get_legal_plays(hand, last_play_pattern=last, player_count=3)
+        assert len(plays) == 0

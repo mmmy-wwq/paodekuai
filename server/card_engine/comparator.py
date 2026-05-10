@@ -74,8 +74,9 @@ def can_beat(
         return False
 
     # ── Rule 6: Same-type comparison ───────────────────────────────
-    if play.type == PatternType.STRAIGHT:
-        # Straights must have equal length in addition to higher rank
+    if play.type in (PatternType.STRAIGHT, PatternType.AIRPLANE, PatternType.CONSECUTIVE_PAIRS):
+        # These patterns must have the same "length" (cards for straights,
+        # triple count for airplanes, pair count for consecutive pairs).
         if play.length != last_play.length:
             return False
 
@@ -263,6 +264,26 @@ def _enumerate_all_patterns(
         if len(cards) >= 3:
             core = list(cards[:3])
             for combo in _generate_kicker_combos(hand, core, kicker_count=2):
+                _add(combo)
+
+    # ── AIRPLANE (飞机带翅膀) ──────────────────────────────────
+    # Find consecutive triple ranks (2+ triples, no TWO)
+    triple_ranks = sorted(
+        r for r, cards in cards_by_rank.items()
+        if len(cards) >= 3 and r != Rank.TWO.value
+    )
+    for start in range(len(triple_ranks)):
+        for end in range(start + 1, len(triple_ranks)):
+            segment = triple_ranks[start:end + 1]
+            if any(segment[i + 1] - segment[i] != 1 for i in range(len(segment) - 1)):
+                continue
+            triple_count = len(segment)
+            # Build core cards: 3 per triple rank
+            core: List[Card] = []
+            for r in segment:
+                core.extend(cards_by_rank[r][:3])
+            # Generate kicker combos
+            for combo in _generate_kicker_combos(hand, core, kicker_count=triple_count * 2):
                 _add(combo)
 
     # ── FOUR_WITH_THREE (四带三) ─────────────────────────────────

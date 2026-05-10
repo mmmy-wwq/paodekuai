@@ -238,6 +238,99 @@ class TestCanBeatStraightLength:
         ])
         assert play and last
         assert can_beat(play, last)
+    def test_airplane_same_length_higher_wins(self):
+        """Higher airplane beats lower airplane of same length."""
+        c = lambda r, s: Card(Suit[s], Rank[r])
+        higher = identify([
+            c("FIVE", "SPADE"), c("FIVE", "HEART"), c("FIVE", "CLUB"),
+            c("SIX", "SPADE"), c("SIX", "HEART"), c("SIX", "CLUB"),
+            c("NINE", "SPADE"), c("NINE", "HEART"),
+            c("TEN", "SPADE"), c("TEN", "HEART"),
+        ], player_count=3)
+        lower = identify([
+            c("THREE", "SPADE"), c("THREE", "HEART"), c("THREE", "CLUB"),
+            c("FOUR", "SPADE"), c("FOUR", "HEART"), c("FOUR", "CLUB"),
+            c("SEVEN", "SPADE"), c("SEVEN", "HEART"),
+            c("EIGHT", "SPADE"), c("EIGHT", "HEART"),
+        ], player_count=3)
+        assert higher is not None and lower is not None
+        assert higher.type == PatternType.AIRPLANE
+        assert lower.type == PatternType.AIRPLANE
+        assert can_beat(higher, lower, player_count=3) == True
+        assert can_beat(lower, higher, player_count=3) == False
+
+    def test_airplane_different_length_cannot_beat(self):
+        """Airplane of different triple count cannot be compared."""
+        c = lambda r, s: Card(Suit[s], Rank[r])
+        longer = identify([
+            c("THREE", "SPADE"), c("THREE", "HEART"), c("THREE", "CLUB"),
+            c("FOUR", "SPADE"), c("FOUR", "HEART"), c("FOUR", "CLUB"),
+            c("FIVE", "SPADE"), c("FIVE", "HEART"), c("FIVE", "CLUB"),
+            c("EIGHT", "SPADE"), c("EIGHT", "HEART"),
+            c("NINE", "SPADE"), c("NINE", "HEART"),
+            c("TEN", "SPADE"), c("TEN", "HEART"),
+        ], player_count=3)  # 3 triples + 6 kickers
+        shorter = identify([
+            c("SIX", "SPADE"), c("SIX", "HEART"), c("SIX", "CLUB"),
+            c("SEVEN", "SPADE"), c("SEVEN", "HEART"), c("SEVEN", "CLUB"),
+            c("NINE", "SPADE"), c("NINE", "HEART"),
+            c("TEN", "SPADE"), c("TEN", "HEART"),
+        ], player_count=3)  # 2 triples + 4 kickers
+        assert longer is not None and shorter is not None
+        assert longer.type == PatternType.AIRPLANE
+        assert shorter.type == PatternType.AIRPLANE
+        # Different lengths → cross-type → cannot beat
+        assert can_beat(longer, shorter, player_count=3) == False
+
+    def test_nothing_beats_airplane_except_bomb(self):
+        """Non-bomb patterns cannot beat an airplane."""
+        airplane = identify([
+            Card(Suit['SPADE'], Rank['THREE']),
+            Card(Suit['HEART'], Rank['THREE']),
+            Card(Suit['CLUB'], Rank['THREE']),
+            Card(Suit['SPADE'], Rank['FOUR']),
+            Card(Suit['HEART'], Rank['FOUR']),
+            Card(Suit['CLUB'], Rank['FOUR']),
+            Card(Suit['SPADE'], Rank['SEVEN']),
+            Card(Suit['HEART'], Rank['SEVEN']),
+            Card(Suit['SPADE'], Rank['EIGHT']),
+            Card(Suit['HEART'], Rank['EIGHT']),
+        ], player_count=3)
+        single = identify([Card(Suit['SPADE'], Rank['ACE'])])
+        pair = identify([Card(Suit['SPADE'], Rank['ACE']), Card(Suit['HEART'], Rank['ACE'])])
+        straight = identify([
+            Card(Suit['SPADE'], Rank['FIVE']),
+            Card(Suit['HEART'], Rank['SIX']),
+            Card(Suit['CLUB'], Rank['SEVEN']),
+            Card(Suit['DIAMOND'], Rank['EIGHT']),
+            Card(Suit['SPADE'], Rank['NINE']),
+        ], player_count=3)
+        assert airplane is not None
+        assert single is not None and pair is not None and straight is not None
+        assert can_beat(single, airplane, player_count=3) == False
+        assert can_beat(pair, airplane, player_count=3) == False
+        assert can_beat(straight, airplane, player_count=3) == False
+
+    def test_free_play_includes_airplane(self, hand_16_cards_mixed):
+        """Free play enumeration should include airplane patterns."""
+        # Use a hand that can form an airplane
+        hand = [
+            Card(Suit['SPADE'], Rank['THREE']),
+            Card(Suit['HEART'], Rank['THREE']),
+            Card(Suit['CLUB'], Rank['THREE']),
+            Card(Suit['SPADE'], Rank['FOUR']),
+            Card(Suit['HEART'], Rank['FOUR']),
+            Card(Suit['CLUB'], Rank['FOUR']),
+            Card(Suit['SPADE'], Rank['SEVEN']),
+            Card(Suit['HEART'], Rank['SEVEN']),
+            Card(Suit['SPADE'], Rank['EIGHT']),
+            Card(Suit['HEART'], Rank['EIGHT']),
+            Card(Suit['SPADE'], Rank['NINE']),
+            Card(Suit['HEART'], Rank['NINE']),
+        ]
+        patterns = get_all_playable(hand, None, player_count=3)
+        airplane_patterns = [p for p in patterns if p.type == PatternType.AIRPLANE]
+        assert len(airplane_patterns) >= 1
 
 
 # ═══════════════════════════════════════════════════════════════════════
@@ -300,6 +393,74 @@ class TestGetAllPlayable:
         # Verify descending order
         for i in range(len(patterns) - 1):
             assert patterns[i].main_rank >= patterns[i + 1].main_rank
+
+    def test_bomb_beats_airplane(self):
+        """BOMB can beat an AIRPLANE."""
+        cards = [
+            Card(Suit['SPADE'], Rank['THREE']), Card(Suit['HEART'], Rank['THREE']),
+            Card(Suit['CLUB'], Rank['THREE']), Card(Suit['DIAMOND'], Rank['THREE']),
+        ]
+        bomb = identify(cards, player_count=3)
+        airplane = identify([
+            Card(Suit['SPADE'], Rank['FIVE']), Card(Suit['HEART'], Rank['FIVE']),
+            Card(Suit['CLUB'], Rank['FIVE']),
+            Card(Suit['SPADE'], Rank['SIX']), Card(Suit['HEART'], Rank['SIX']),
+            Card(Suit['CLUB'], Rank['SIX']),
+            Card(Suit['SPADE'], Rank['NINE']), Card(Suit['HEART'], Rank['NINE']),
+            Card(Suit['SPADE'], Rank['TEN']), Card(Suit['HEART'], Rank['TEN']),
+        ], player_count=3)
+        assert bomb is not None and airplane is not None
+        assert bomb.type == PatternType.BOMB
+        assert airplane.type == PatternType.AIRPLANE
+        assert can_beat(bomb, airplane, player_count=3) == True
+
+    def test_airplane_cannot_beat_non_airplane(self):
+        """Airplane cannot beat non-airplane patterns (cross-type)."""
+        airplane = identify([
+            Card(Suit['SPADE'], Rank['THREE']), Card(Suit['HEART'], Rank['THREE']),
+            Card(Suit['CLUB'], Rank['THREE']),
+            Card(Suit['SPADE'], Rank['FOUR']), Card(Suit['HEART'], Rank['FOUR']),
+            Card(Suit['CLUB'], Rank['FOUR']),
+            Card(Suit['SPADE'], Rank['SEVEN']), Card(Suit['HEART'], Rank['SEVEN']),
+            Card(Suit['SPADE'], Rank['EIGHT']), Card(Suit['HEART'], Rank['EIGHT']),
+        ], player_count=3)
+        single = identify([Card(Suit['SPADE'], Rank['ACE'])])
+        assert airplane is not None and single is not None
+        # Airplane cannot beat a single (cross-type)
+        assert can_beat(airplane, single, player_count=3) == False
+
+    def test_airplane_on_table_filters_correctly(self):
+        """With airplane on table, only same-length higher airplane or bombs returned."""
+        # Hand has a higher airplane (777+888) and a bomb (3333)
+        hand = [
+            Card(Suit['SPADE'], Rank['SEVEN']), Card(Suit['HEART'], Rank['SEVEN']),
+            Card(Suit['CLUB'], Rank['SEVEN']),
+            Card(Suit['SPADE'], Rank['EIGHT']), Card(Suit['HEART'], Rank['EIGHT']),
+            Card(Suit['CLUB'], Rank['EIGHT']),
+            Card(Suit['SPADE'], Rank['JACK']), Card(Suit['HEART'], Rank['JACK']),
+            Card(Suit['SPADE'], Rank['QUEEN']), Card(Suit['HEART'], Rank['QUEEN']),
+        ]  # 777+888+J+J+Q+Q = 2 triples + 4 kickers = airplane
+        # Last play is a lower airplane (555+666)
+        last = identify([
+            Card(Suit['SPADE'], Rank['FIVE']), Card(Suit['HEART'], Rank['FIVE']),
+            Card(Suit['CLUB'], Rank['FIVE']),
+            Card(Suit['SPADE'], Rank['SIX']), Card(Suit['HEART'], Rank['SIX']),
+            Card(Suit['CLUB'], Rank['SIX']),
+            Card(Suit['SPADE'], Rank['NINE']), Card(Suit['HEART'], Rank['NINE']),
+            Card(Suit['SPADE'], Rank['TEN']), Card(Suit['HEART'], Rank['TEN']),
+        ], player_count=3)
+        assert last is not None and last.type == PatternType.AIRPLANE
+        patterns = get_all_playable(hand, last, player_count=3)
+        # Should include 777+888 airplane (higher same-length)
+        has_higher_airplane = any(
+            p.type == PatternType.AIRPLANE and p.main_rank > last.main_rank
+            for p in patterns
+        )
+        assert has_higher_airplane, f"Should find higher airplane in {patterns}"
+        # All airplane patterns should be same length
+        for p in patterns:
+            if p.type == PatternType.AIRPLANE:
+                assert p.length == last.length, f"Airplane length {p.length} != {last.length}"
 
 
 # ═══════════════════════════════════════════════════════════════════════

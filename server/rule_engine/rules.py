@@ -439,6 +439,23 @@ class RuleEngine:
                 for combo in _generate_kicker_combos(hand, core, kicker_count=3):
                     _add(combo)
 
+        # ── AIRPLANE (飞机带翅膀) ──────────────────────────────────
+        triple_ranks = sorted(
+            r for r, cards in cards_by_rank.items()
+            if len(cards) >= 3 and r != Rank.TWO.value
+        )
+        for start in range(len(triple_ranks)):
+            for end in range(start + 1, len(triple_ranks)):
+                segment = triple_ranks[start:end + 1]
+                if any(segment[i + 1] - segment[i] != 1 for i in range(len(segment) - 1)):
+                    continue
+                triple_count = len(segment)
+                core: List[Card] = []
+                for r in segment:
+                    core.extend(cards_by_rank[r][:3])
+                for combo in _generate_kicker_combos(hand, core, kicker_count=triple_count * 2):
+                    _add(combo)
+
         return results
 
     # ── determine_first_player ──────────────────────────────────────
@@ -452,38 +469,26 @@ class RuleEngine:
         """Determine which player acts first in a round.
 
         Rules:
-          - First round (round_number == 1):
-              - 3 or 4 players: the player holding ♠3 acts first.
-              - 2 players: random (0 or 1).
-          - Subsequent rounds: the previous winner acts first.
-
-        Args:
-            players: List of player dicts, each with keys:
-                "player_id" (str) and "hand" (List[Card]).
-            round_number: 1-based round number.
-            previous_winner_id: The player_id of the previous round's winner.
-
-        Returns:
-            0-based index of the first player.
+          - 3 or 4 players: the player holding ♠3 acts first in EVERY round.
+          - 2 players:
+              - First round: random (0 or 1).
+              - Subsequent rounds: the previous winner leads.
         """
-        # ── Subsequent rounds: winner leads ──────────────────────────
+        # ── 3+ players: ♠3 holder leads every round ─────────────────
+        if self.config.player_count >= 3:
+            spade_three = Card(Suit.SPADE, Rank.THREE)
+            for idx, p in enumerate(players):
+                hand = p.get("hand", [])
+                if spade_three in hand:
+                    return idx
+            return 0
+
+        # ── 2 players: subsequent rounds → winner leads ────────────
         if round_number > 1 and previous_winner_id is not None:
             for idx, p in enumerate(players):
                 if p.get("player_id") == previous_winner_id:
                     return idx
-            # Fallback if winner not found (shouldn't happen)
             return 0
 
-        # ── First round ──────────────────────────────────────────────
-        if self.config.player_count == 2:
-            return random.randint(0, 1)
-
-        # 3 or 4 players: find holder of ♠3
-        spade_three = Card(Suit.SPADE, Rank.THREE)
-        for idx, p in enumerate(players):
-            hand = p.get("hand", [])
-            if spade_three in hand:
-                return idx
-
-        # Fallback (should never happen with a valid deck)
-        return 0
+        # ── 2 players first round → random ─────────────────────────
+        return random.randint(0, 1)
