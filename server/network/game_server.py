@@ -261,7 +261,7 @@ class GameServer:
         # ── Start watchdog: auto-play / remove after 60s ──────────────
         async def _watchdog():
             try:
-                await asyncio.sleep(60)
+                await asyncio.sleep(5)
             except asyncio.CancelledError:
                 return  # reconnected — cancelled
             # Player didn't reconnect — remove from room
