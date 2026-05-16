@@ -16,6 +16,7 @@ Message routing by MsgType:
 
 from __future__ import annotations
 
+import asyncio
 import time
 import uuid
 from typing import Any, Dict, Optional
@@ -56,18 +57,27 @@ class GameServer:
         self._player_room: Dict[str, str] = {}
         # room_id → TurnTimer for turn timeout
         self._turn_timers: Dict[str, TurnTimer] = {}
+        # Reconnection tokens: pid → token (persists across disconnects)
+        self._reconnect_tokens: Dict[str, str] = {}
+        # Disconnected players: pid → asyncio.TimerHandle for watchdog
+        self._disconnect_watchdogs: Dict[str, asyncio.TimerHandle] = {}
 
     # ── Connection lifecycle ─────────────────────────────────────────────────
 
     async def handle_connection(
-        self, websocket: WebSocket, room_id: str, player_name: str, player_count: int = 4, reconnect_id: str = ""
+        self, websocket: WebSocket, room_id: str, player_name: str,
+        player_count: int = 4, reconnect_id: str = "",
+        reconnect_token: str = "",
     ) -> Optional[str]:
         """Accept WebSocket, register player in room, send STATE_SYNC.
 
         Behaviour by room_id value:
         - ``"lobby"``: Accept without auto-creating a room — client can
           send CREATE_ROOM / JOIN_ROOM messages to manage rooms.
-        - Existing room: Register player, broadcast STATE_SYNC.
+        - Existing room:
+            - If ``reconnect_id`` + ``reconnect_token`` match a known
+              disconnected player → restore their connection.
+            - Otherwise → register as a new player.
         - Non-existent room: Auto-create with the URL room_id as code
           (first player = host).
 
@@ -75,6 +85,8 @@ class GameServer:
             websocket: The accepted WebSocket connection.
             room_id: Room identifier from the URL path.
             player_name: Display name from query param ``?name=XXX``.
+            reconnect_id: Player ID from ``?pid=XXX`` (stored in localStorage).
+            reconnect_token: Reconnection token from ``?token=XXX``.
 
         Returns:
             The generated player_id on success, or None on failure.
@@ -116,22 +128,64 @@ class GameServer:
                 await websocket.close()
                 return None
 
-        # ── Generate / reuse player ID (MUST be before stale cleanup) ──
-        if reconnect_id and reconnect_id in room.players:
-            player_id = reconnect_id  # reuse existing ID on reconnect
-            print(f"[CONN] Reconnecting player {player_id[:8]} ({player_name})")
+        # ── Role-based reconnection: same name = same role slot ─────────
+        # For the family room (or any room), if a player with the same
+        # name already exists in the room, the new connection takes over
+        # that role: kick the old socket and reclaim the pid.
+        existing_pid: Optional[str] = None
+        for pid, info in room.players.items():
+            if info.get("name") == player_name:
+                existing_pid = pid
+                break
+
+        if existing_pid:
+            # Kick old connection if still active
+            old_ws = self._room_sockets.get(room_id, {}).get(existing_pid)
+            if old_ws is not None and old_ws is not websocket:
+                try:
+                    await old_ws.close(code=1000, reason="Role taken over")
+                except Exception:
+                    pass
+            # Remove old tracking
+            self._room_sockets.get(room_id, {}).pop(existing_pid, None)
+            self._player_room.pop(existing_pid, None)
+
+            # Cancel old watchdog if any
+            wd = self._disconnect_watchdogs.pop(existing_pid, None)
+            if wd:
+                wd.cancel()
+
+            # Leave room first (so join_room can re-add)
+            await self._rm.leave_room(room_id, existing_pid)
+
+            # Reclaim the pid
+            reconnect_id = existing_pid
+            print(f"[CONN] Role takeover: {player_name} reclaims pid={existing_pid[:8]}")
+
+        # ── Reconnection: validate token ─────────────────────────────────
+        if reconnect_id:
+            stored_token = self._reconnect_tokens.get(reconnect_id)
+            if stored_token and stored_token == reconnect_token:
+                # Valid reconnection — restore player
+                player_id = reconnect_id
+                # Cancel disconnect watchdog
+                wd = self._disconnect_watchdogs.pop(player_id, None)
+                if wd:
+                    wd.cancel()
+                print(f"[CONN] Reconnected player {player_id[:8]} ({player_name})")
+            else:
+                # Token invalid or expired — but still let them back in
+                # if their pid exists in the room (remove old entry first)
+                if room and reconnect_id in room.players:
+                    await self._rm.leave_room(room_id, reconnect_id)
+                    player_id = reconnect_id
+                    print(f"[CONN] Reclaimed player slot {player_id[:8]} ({player_name})")
+                else:
+                    print(f"[CONN] Reconnect failed for pid={reconnect_id[:8]} — unknown, will create new")
+                    reconnect_id = ""
+                    player_id = str(uuid.uuid4())[:8]
         else:
             player_id = str(uuid.uuid4())[:8]
-
-        # ── Clean up stale players (skip the reconnecting player) ────────
-        active_sockets = self._room_sockets.get(room_id, {})
-        stale_count = 0
-        for pid in list(room.players.keys()):
-            if pid not in active_sockets and pid != player_id:
-                await self._rm.leave_room(room_id, pid)
-                stale_count += 1
-        if stale_count:
-            print(f"[CONN] room={room_id} cleaned {stale_count} stale players")
 
         # ── Register player in room ─────────────────────────────────────
         joined = await self._rm.join_room(room_id, player_id, player_name)
@@ -143,13 +197,17 @@ class GameServer:
             await websocket.close()
             return None
 
+        # ── Generate/refresh reconnect token ────────────────────────────
+        new_token = str(uuid.uuid4())[:12]
+        self._reconnect_tokens[player_id] = new_token
+
         # ── Track WebSocket ─────────────────────────────────────────────
         if room_id not in self._room_sockets:
             self._room_sockets[room_id] = {}
         self._room_sockets[room_id][player_id] = websocket
         self._player_room[player_id] = room_id
 
-        # ── Send STATE_SYNC ─────────────────────────────────────────────
+        # ── Send STATE_SYNC (includes reconnect_token for the player) ──
         await self.broadcast_state(room_id)
 
         return player_id
@@ -179,15 +237,42 @@ class GameServer:
         if player_id is None or room_id is None:
             return
 
-        # ── Clean up tracking ──────────────────────────────────────────
+        # ── Clean up socket tracking ───────────────────────────────────
         if room_id in self._room_sockets:
             self._room_sockets[room_id].pop(player_id, None)
         self._player_room.pop(player_id, None)
+        # Keep player in room + reconnect token so they can reconnect
 
-        # ── Keep player in room for reconnection ─────────────────────────
-        # (do NOT call leave_room — player stays so they can reconnect)
+        # ── Auto-enable托管 for disconnected player if in PLAYING ────
+        room = await self._rm.get_room(room_id)
+        if room and room.game_state_manager:
+            gsm = room.game_state_manager
+            if gsm._phase.value == "PLAYING" and player_id not in gsm._auto_play_players:
+                gsm.toggle_auto_play(player_id)
 
-        # ── Broadcast updated state ────────────────────────────────────
+        # ── Start watchdog: auto-play / remove after 60s ──────────────
+        async def _watchdog():
+            try:
+                await asyncio.sleep(60)
+            except asyncio.CancelledError:
+                return  # reconnected — cancelled
+            # Player didn't reconnect — remove from room
+            self._disconnect_watchdogs.pop(player_id, None)
+            self._reconnect_tokens.pop(player_id, None)
+            room = await self._rm.get_room(room_id)
+            if room and room.game_state_manager:
+                gsm = room.game_state_manager
+                state = gsm.get_state()
+                if state.get("current_turn") == player_id:
+                    gsm.auto_play(player_id)
+            await self._rm.leave_room(room_id, player_id)
+            await self.broadcast_state(room_id)
+            print(f"[WATCHDOG] Player {player_id[:8]} timed out, removed from room {room_id}")
+
+        task = asyncio.create_task(_watchdog())
+        self._disconnect_watchdogs[player_id] = task
+
+        # ── Broadcast updated state (other players see "暂离") ─────────
         await self.broadcast_state(room_id)
 
     # ── Message routing ─────────────────────────────────────────────────────
@@ -240,6 +325,9 @@ class GameServer:
             elif msg_type == MsgType.READY:
                 await self._handle_ready(websocket, player_id)
 
+            elif msg_type == MsgType.AUTO_PLAY:
+                await self._handle_auto_play(websocket, player_id)
+
             else:
                 await self._send_error(
                     websocket, "UNHANDLED_TYPE", f"Unhandled message type: {msg_type.value}"
@@ -290,6 +378,10 @@ class GameServer:
                 if timer and timer.is_running:
                     personal_payload["remaining_time"] = timer.remaining_seconds()
 
+                # Include reconnect token for this player (reconnection support)
+                token = self._reconnect_tokens.get(pid, "")
+                personal_payload["reconnect_token"] = token
+
                 msg = create_message(MsgType.STATE_SYNC, payload=personal_payload)
                 try:
                     await ws.send_text(serialize_message(msg))
@@ -317,6 +409,7 @@ class GameServer:
                     "your_player_id": pid,
                     "your_hand": [],
                     "historical_scores": get_all_scores(),
+                    "reconnect_token": self._reconnect_tokens.get(pid, ""),
                 }
 
                 msg = create_message(MsgType.STATE_SYNC, payload=payload)
@@ -541,6 +634,13 @@ class GameServer:
             await self._start_turn_timer(room_id)
         await self.broadcast_state(room_id)
 
+        # If the next player is in auto-play, trigger immediately
+        if result.get("phase") != "ROUND_END":
+            await self._check_and_trigger_auto_play(room_id)
+            # Restart timer for the final player after chain (stale timer fix)
+            if gsm._phase.value == "PLAYING":
+                await self._start_turn_timer(room_id)
+
         # ── If round ended, broadcast ROUND_END and persist scores ─────
         if result.get("phase") == "ROUND_END":
             score_deltas = result.get("score_deltas", {})
@@ -615,6 +715,12 @@ class GameServer:
         await self._start_turn_timer(room_id)
         await self.broadcast_state(room_id)
 
+        # If the next player is in auto-play, trigger immediately
+        await self._check_and_trigger_auto_play(room_id)
+        # Restart timer for the final player after chain (stale timer fix)
+        if gsm._phase.value == "PLAYING":
+            await self._start_turn_timer(room_id)
+
     async def _handle_declare(
         self, websocket: WebSocket, player_id: str, msg: Message
     ) -> None:
@@ -653,6 +759,61 @@ class GameServer:
         # ── Start turn timer if game entered PLAYING phase ───────────
         if gsm._phase.value == "PLAYING":
             await self._start_turn_timer(room_id)
+            # Trigger auto-play if the first player is in auto-play
+            await self._check_and_trigger_auto_play(room_id)
+            # Restart timer for the final player after chain (stale timer fix)
+            if gsm._phase.value == "PLAYING":
+                await self._start_turn_timer(room_id)
+
+    async def _handle_auto_play(
+        self, websocket: WebSocket, player_id: str
+    ) -> None:
+        """Handle AUTO_PLAY: toggle auto-play mode for the player."""
+        room_id = self._player_room.get(player_id)
+        if room_id is None:
+            await self._send_error(websocket, "NOT_IN_ROOM", "Not in a room")
+            return
+
+        room = await self._rm.get_room(room_id)
+        if room is None or room.game_state_manager is None:
+            await self._send_error(websocket, "NO_GAME", "No active game")
+            return
+
+        gsm = room.game_state_manager
+        result = gsm.toggle_auto_play(player_id)
+
+        if result.get("success"):
+            await self.broadcast_state(room_id)
+            # If enabled and it's this player's turn, trigger immediately
+            if result.get("auto_play_enabled"):
+                state = gsm.get_state()
+                if state.get("current_turn") == player_id and gsm._phase.value == "PLAYING":
+                    gsm.auto_play(player_id)
+                    await self.broadcast_state(room_id)
+                    # Chain through consecutive托管 players
+                    await self._check_and_trigger_auto_play(room_id)
+                    # Start timer for the final (non-托管) player
+                    if gsm._phase.value == "PLAYING":
+                        await self._start_turn_timer(room_id)
+
+    async def _check_and_trigger_auto_play(self, room_id: str) -> None:
+        """After an action, chain-trigger auto-play for ALL consecutive
+        auto-play players until a non-auto-play player or round end."""
+        room = await self._rm.get_room(room_id)
+        if room is None or room.game_state_manager is None:
+            return
+        gsm = room.game_state_manager
+        if gsm._phase.value != "PLAYING":
+            return
+        for _ in range(10):  # safety limit
+            state = gsm.get_state()
+            current = state.get("current_turn")
+            if not current or current not in gsm._auto_play_players:
+                break
+            gsm.auto_play(current)
+            if gsm._phase.value != "PLAYING":
+                break
+        await self.broadcast_state(room_id)
 
     async def _handle_leave(
         self, websocket: WebSocket, player_id: str
@@ -823,6 +984,7 @@ class GameServer:
             personal_payload: Dict[str, Any] = dict(state)
             personal_payload["your_hand"] = p.get("hand", [])
             personal_payload["your_player_id"] = pid
+            personal_payload["reconnect_token"] = self._reconnect_tokens.get(pid, "")
 
             msg = create_message(MsgType.STATE_SYNC, payload=personal_payload)
             try:
@@ -852,7 +1014,7 @@ class GameServer:
         room_id_captured = room_id
 
         async def on_timeout():
-            """Auto-play or auto-pass on timeout."""
+            """Auto-play or auto-pass on timeout. Chains through托管 players."""
             room2 = await self._rm.get_room(room_id_captured)
             if room2 is None or room2.game_state_manager is None:
                 return
@@ -872,20 +1034,18 @@ class GameServer:
                         p_info = room2.players.get(pid2)
                         if p_info:
                             add_score(p_info.get("name", pid2), delta)
-                # Still broadcast ROUND_END state
                 await self.broadcast_state(room_id_captured)
                 return
 
+            await self.broadcast_state(room_id_captured)
+
             if result.get("success"):
-                # Start timer for NEXT turn BEFORE broadcasting,
-                # so remaining_time appears in the state
+                # Chain through consecutive托管 players
+                await self._check_and_trigger_auto_play(room_id_captured)
+                # Start timer for the final (non-托管) player
                 room3 = await self._rm.get_room(room_id_captured)
                 if room3 and room3.game_state_manager and room3.game_state_manager._phase.value == "PLAYING":
                     await self._start_turn_timer(room_id_captured)
-
-            # Always broadcast so the client gets updated state
-            # (even on failure — shows must-play error info on the client side)
-            await self.broadcast_state(room_id_captured)
 
         timer.start(duration_sec=30, on_timeout=on_timeout)
         self._turn_timers[room_id] = timer
@@ -896,6 +1056,44 @@ class GameServer:
         """Cancel the turn timer for a room."""
         if room_id in self._turn_timers:
             self._turn_timers[room_id].cancel()
+
+    # ── Reset ───────────────────────────────────────────────────────────────────
+
+    async def reset_all(self) -> dict:
+        """End all games, kick all players, clear all rooms.
+        Returns a summary dict.
+        """
+        room_count = len(self._room_sockets)
+        conn_count = sum(len(s) for s in self._room_sockets.values())
+
+        # Cancel all turn timers
+        for tid in list(self._turn_timers.keys()):
+            self._turn_timers[tid].cancel()
+        self._turn_timers.clear()
+
+        # Cancel all disconnect watchdogs
+        for task in self._disconnect_watchdogs.values():
+            task.cancel()
+        self._disconnect_watchdogs.clear()
+
+        # Close all WebSocket connections
+        for room_sockets in self._room_sockets.values():
+            for ws in room_sockets.values():
+                try:
+                    await ws.close(code=1001, reason="Server reset")
+                except Exception:
+                    pass
+
+        # Clear all tracking
+        self._room_sockets.clear()
+        self._player_room.clear()
+        self._reconnect_tokens.clear()
+        await self._rm.reset_all()
+
+        return {
+            "rooms_cleared": room_count,
+            "connections_closed": conn_count,
+        }
 
     # ── Diagnostic ────────────────────────────────────────────────────────────
 

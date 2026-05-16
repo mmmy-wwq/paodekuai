@@ -175,13 +175,13 @@ class RoomManager:
             room = self._rooms.get(room_id)
             if room is None:
                 return False
-            if room.is_full:
-                return False
             if player_id in room.players:
-                # Player already in room — treat as rejoin
+                # Player already in room — treat as rejoin (reconnection)
                 room.players[player_id]["name"] = player_name
                 room.players[player_id]["connected_at"] = time.time()
                 return True
+            if room.is_full:
+                return False
 
             room.players[player_id] = {
                 "name": player_name,
@@ -298,6 +298,15 @@ class RoomManager:
                 del self._rooms[rid]
 
         return len(stale_ids)
+
+    async def reset_all(self) -> int:
+        """Remove ALL rooms and reset all game state.
+        Returns the number of rooms that were active.
+        """
+        async with self._lock:
+            count = len(self._rooms)
+            self._rooms.clear()
+        return count
 
     @property
     def room_count(self) -> int:
