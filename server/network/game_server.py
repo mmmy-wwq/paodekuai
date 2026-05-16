@@ -207,6 +207,14 @@ class GameServer:
         self._room_sockets[room_id][player_id] = websocket
         self._player_room[player_id] = room_id
 
+        # ── Disable托管 on reconnection (player is back) ────────────────
+        room_after = await self._rm.get_room(room_id)
+        if room_after and room_after.game_state_manager:
+            gsm = room_after.game_state_manager
+            if player_id in gsm._auto_play_players:
+                gsm.toggle_auto_play(player_id)
+                print(f"[CONN] Disabled auto-play for reconnected player {player_id[:8]}")
+
         # ── Send STATE_SYNC (includes reconnect_token for the player) ──
         await self.broadcast_state(room_id)
 
@@ -654,12 +662,10 @@ class GameServer:
             await self._start_turn_timer(room_id)
         await self.broadcast_state(room_id)
 
-        # If the next player is in auto-play, trigger immediately
+        # If the next player is in auto-play, trigger immediately.
+        # _check_and_trigger_auto_play handles chain + timer + broadcast.
         if result.get("phase") != "ROUND_END":
             await self._check_and_trigger_auto_play(room_id)
-            # Restart timer for the final player after chain (stale timer fix)
-            if gsm._phase.value == "PLAYING":
-                await self._start_turn_timer(room_id)
 
         # ── If round ended, broadcast ROUND_END and persist scores ─────
         if result.get("phase") == "ROUND_END":
@@ -735,11 +741,9 @@ class GameServer:
         await self._start_turn_timer(room_id)
         await self.broadcast_state(room_id)
 
-        # If the next player is in auto-play, trigger immediately
+        # If the next player is in auto-play, trigger immediately.
+        # _check_and_trigger_auto_play handles chain + timer + broadcast.
         await self._check_and_trigger_auto_play(room_id)
-        # Restart timer for the final player after chain (stale timer fix)
-        if gsm._phase.value == "PLAYING":
-            await self._start_turn_timer(room_id)
 
     async def _handle_declare(
         self, websocket: WebSocket, player_id: str, msg: Message
@@ -779,11 +783,9 @@ class GameServer:
         # ── Start turn timer if game entered PLAYING phase ───────────
         if gsm._phase.value == "PLAYING":
             await self._start_turn_timer(room_id)
-            # Trigger auto-play if the first player is in auto-play
+            # Trigger auto-play if the first player is in auto-play.
+            # _check_and_trigger_auto_play handles chain + timer + broadcast.
             await self._check_and_trigger_auto_play(room_id)
-            # Restart timer for the final player after chain (stale timer fix)
-            if gsm._phase.value == "PLAYING":
-                await self._start_turn_timer(room_id)
 
     async def _handle_auto_play(
         self, websocket: WebSocket, player_id: str
@@ -810,15 +812,15 @@ class GameServer:
                 if state.get("current_turn") == player_id and gsm._phase.value == "PLAYING":
                     gsm.auto_play(player_id)
                     await self.broadcast_state(room_id)
-                    # Chain through consecutive托管 players
+                    # Chain through consecutive托管 players.
+                    # _check_and_trigger_auto_play handles chain + timer + broadcast.
                     await self._check_and_trigger_auto_play(room_id)
-                    # Start timer for the final (non-托管) player
-                    if gsm._phase.value == "PLAYING":
-                        await self._start_turn_timer(room_id)
 
     async def _check_and_trigger_auto_play(self, room_id: str) -> None:
         """After an action, chain-trigger auto-play for ALL consecutive
-        auto-play players until a non-auto-play player or round end."""
+        auto-play players until a non-auto-play player or round end.
+        Also manages the turn timer: starts a fresh timer for the
+        final player and broadcasts with correct remaining_time."""
         room = await self._rm.get_room(room_id)
         if room is None or room.game_state_manager is None:
             return
@@ -836,6 +838,10 @@ class GameServer:
                 break
             # Delay between托管 moves so players can see the action
             await asyncio.sleep(1.5)
+        # Start fresh timer for whoever ended up as current after the chain,
+        # then broadcast so clients see the correct remaining_time.
+        if gsm._phase.value == "PLAYING":
+            await self._start_turn_timer(room_id)
         await self.broadcast_state(room_id)
 
     async def _handle_leave(
@@ -1060,15 +1066,10 @@ class GameServer:
                 await self.broadcast_state(room_id_captured)
                 return
 
-            await self.broadcast_state(room_id_captured)
-
             if result.get("success"):
-                # Chain through consecutive托管 players
+                # Chain through consecutive托管 players.
+                # _check_and_trigger_auto_play handles chain + timer + broadcast.
                 await self._check_and_trigger_auto_play(room_id_captured)
-                # Start timer for the final (non-托管) player
-                room3 = await self._rm.get_room(room_id_captured)
-                if room3 and room3.game_state_manager and room3.game_state_manager._phase.value == "PLAYING":
-                    await self._start_turn_timer(room_id_captured)
 
         timer.start(duration_sec=30, on_timeout=on_timeout)
         self._turn_timers[room_id] = timer
