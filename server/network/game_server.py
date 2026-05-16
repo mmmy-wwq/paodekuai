@@ -649,36 +649,40 @@ class GameServer:
 
         # ── If round ended, broadcast ROUND_END and persist scores ─────
         if result.get("phase") == "ROUND_END":
-            score_deltas = result.get("score_deltas", {})
+            await self._on_round_end(room_id, result)
 
-            # Persist historical scores BEFORE re-broadcasting state
-            if room and score_deltas:
-                for pid, delta in score_deltas.items():
-                    p_info = room.players.get(pid)
-                    if p_info:
-                        p_name = p_info.get("name", pid)
-                        add_score(p_name, delta)
-                        print(f"[SCORE] {p_name} delta={delta:+d}")
+    async def _on_round_end(self, room_id: str, result: Dict[str, Any]) -> None:
+        """Handle round-end: persist scores, send ROUND_END message, cancel timer."""
+        score_deltas = result.get("score_deltas", {})
 
-            # Re-broadcast state with updated historical_scores
-            await self.broadcast_state(room_id)
+        room = await self._rm.get_room(room_id)
+        if room and score_deltas:
+            for pid, delta in score_deltas.items():
+                p_info = room.players.get(pid)
+                if p_info:
+                    p_name = p_info.get("name", pid)
+                    add_score(p_name, delta)
+                    print(f"[SCORE] {p_name} delta={delta:+d}")
 
-            # Broadcast ROUND_END message
-            round_end_msg = create_message(
-                MsgType.ROUND_END,
-                payload={
-                    "winner_id": result.get("winner_id"),
-                    "scores": result.get("scores"),
-                    "score_deltas": score_deltas,
-                    "is_declaration_game": result.get("is_declaration_game"),
-                    "declarer_id": result.get("declarer_id"),
-                    "breaker_id": result.get("breaker_id"),
-                },
-            )
-            await self._broadcast_raw(room_id, serialize_message(round_end_msg))
+        # Re-broadcast state with updated historical_scores
+        await self.broadcast_state(room_id)
 
-            # Cancel turn timer (round is over)
-            self._cancel_turn_timer(room_id)
+        # Broadcast ROUND_END message
+        round_end_msg = create_message(
+            MsgType.ROUND_END,
+            payload={
+                "winner_id": result.get("winner_id"),
+                "scores": result.get("scores"),
+                "score_deltas": score_deltas,
+                "is_declaration_game": result.get("is_declaration_game"),
+                "declarer_id": result.get("declarer_id"),
+                "breaker_id": result.get("breaker_id"),
+            },
+        )
+        await self._broadcast_raw(room_id, serialize_message(round_end_msg))
+
+        # Cancel turn timer (round is over)
+        self._cancel_turn_timer(room_id)
 
     async def _handle_pass(
         self, websocket: WebSocket, player_id: str
@@ -790,7 +794,10 @@ class GameServer:
             if result.get("auto_play_enabled"):
                 state = gsm.get_state()
                 if state.get("current_turn") == player_id and gsm._phase.value == "PLAYING":
-                    gsm.auto_play(player_id)
+                    ar = gsm.auto_play(player_id)
+                    if ar.get("phase") == "ROUND_END":
+                        await self._on_round_end(room_id, ar)
+                        return
                     await self.broadcast_state(room_id)
                     # Chain through consecutive托管 players.
                     # _check_and_trigger_auto_play handles chain + timer + broadcast.
@@ -812,7 +819,10 @@ class GameServer:
             current = state.get("current_turn")
             if not current or current not in gsm._auto_play_players:
                 break
-            gsm.auto_play(current)
+            result = gsm.auto_play(current)
+            if result.get("phase") == "ROUND_END":
+                await self._on_round_end(room_id, result)
+                return
             await self.broadcast_state(room_id)
             if gsm._phase.value != "PLAYING":
                 break
@@ -1036,14 +1046,7 @@ class GameServer:
             result = gsm2.auto_play(pid)
 
             if result.get("phase") == "ROUND_END":
-                # Persist scores
-                sd = result.get("score_deltas", {})
-                if sd:
-                    for pid2, delta in sd.items():
-                        p_info = room2.players.get(pid2)
-                        if p_info:
-                            add_score(p_info.get("name", pid2), delta)
-                await self.broadcast_state(room_id_captured)
+                await self._on_round_end(room_id_captured, result)
                 return
 
             if result.get("success"):

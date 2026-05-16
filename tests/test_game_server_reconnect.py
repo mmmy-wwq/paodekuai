@@ -491,3 +491,122 @@ class TestRoleBasedReconnection:
         assert pid_r == pid
         room = await gs._rm.get_room(room_id)
         assert room.players[pid]["name"] == "爸爸"
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# Tests:托管 winning round should not drop score_deltas
+# ═══════════════════════════════════════════════════════════════════════════
+
+class TestAutoPlayRoundEndScoring:
+    """Test that托管 winning a round properly saves scores."""
+
+    @pytest.fixture
+    def gs(self) -> GameServer:
+        rm = RoomManager()
+        return GameServer(room_manager=rm)
+
+    @pytest.mark.asyncio
+    async def test_auto_play_wins_round_saves_scores(self, gs: GameServer):
+        """
+        BUG: When托管 auto-plays the winning hand through
+        _check_and_trigger_auto_play, the ROUND_END message is never sent,
+        so score_deltas are lost and scores are not persisted.
+        """
+        room_id = "TEST"
+        await gs._rm.create_room_with_id(room_id, max_players=3)
+
+        ws1 = MockWebSocket()
+        pid1 = await gs.handle_connection(ws1, room_id, "Alice", player_count=3)
+        ws2 = MockWebSocket()
+        pid2 = await gs.handle_connection(ws2, room_id, "Bob", player_count=3)
+        ws3 = MockWebSocket()
+        pid3 = await gs.handle_connection(ws3, room_id, "Charlie", player_count=3)
+
+        room = await gs._rm.get_room(room_id)
+        gsm = _setup_gsm_for_playing(room, ["Alice", "Bob", "Charlie"], [pid1, pid2, pid3])
+
+        # Give Alice 1 card, Bob 3 cards, Charlie 3 cards
+        # Turn order counter-clockwise: Alice(0) → Charlie(2) → Bob(1) → Alice(0)
+        gsm._players[0]["hand"] = [c("THREE", "SPADE")]
+        gsm._players[1]["hand"] = [c("FOUR", "DIAMOND"), c("SIX", "SPADE"), c("TEN", "HEART")]
+        gsm._players[2]["hand"] = [c("FOUR", "SPADE"), c("SEVEN", "CLUB"), c("JACK", "DIAMOND")]
+        gsm._current_turn = 0  # Alice's turn (free play)
+        gsm._last_play_cards = None
+        gsm._last_play_player_index = None
+        gsm._consecutive_passes = 0
+        gsm._turn_number = 0
+
+        # Alice is托管
+        gsm.toggle_auto_play(pid1)
+
+        # Trigger chain: Alice is托管, has 1 card, auto-plays it → wins round
+        await gs._check_and_trigger_auto_play(room_id)
+
+        # Round should have ended
+        assert gsm._phase.value == "ROUND_END", (
+            f"Expected ROUND_END after托管 wins, got {gsm._phase.value}"
+        )
+
+        # Round history should have an entry with score_deltas
+        assert len(gsm._round_history) > 0, (
+            "BUG: Round history is empty — _end_round_internal was never called"
+        )
+        last_round = gsm._round_history[-1]
+        assert "score_deltas" in last_round, (
+            "BUG: Round history entry missing score_deltas"
+        )
+        assert sum(last_round["score_deltas"].values()) == 0, (
+            "Score deltas should sum to 0 (net zero)"
+        )
+        assert last_round["winner_id"] == pid1, (
+            f"Expected Alice ({pid1}) as winner, got {last_round.get('winner_id')}"
+        )
+
+        print(f"[TEST] Round ended via托管. winner={pid1[:8]}, deltas={last_round['score_deltas']}")
+
+    @pytest.mark.asyncio
+    async def test_auto_play_win_through_handle_auto_play(self, gs: GameServer):
+        """
+        BUG: _handle_auto_play also doesn't handle ROUND_END properly
+        when托管 wins by playing last card.
+        """
+        room_id = "TEST"
+        await gs._rm.create_room_with_id(room_id, max_players=3)
+
+        ws1 = MockWebSocket()
+        pid1 = await gs.handle_connection(ws1, room_id, "Alice", player_count=3)
+        ws2 = MockWebSocket()
+        pid2 = await gs.handle_connection(ws2, room_id, "Bob", player_count=3)
+        ws3 = MockWebSocket()
+        pid3 = await gs.handle_connection(ws3, room_id, "Charlie", player_count=3)
+
+        room = await gs._rm.get_room(room_id)
+        gsm = _setup_gsm_for_playing(room, ["Alice", "Bob", "Charlie"], [pid1, pid2, pid3])
+
+        # Alice has just 1 card
+        gsm._players[0]["hand"] = [c("THREE", "SPADE")]
+        gsm._players[1]["hand"] = [c("FOUR", "DIAMOND"), c("SIX", "SPADE"), c("TEN", "HEART")]
+        gsm._players[2]["hand"] = [c("FOUR", "SPADE"), c("SEVEN", "CLUB"), c("JACK", "DIAMOND")]
+        gsm._current_turn = 0  # Alice
+        gsm._last_play_cards = None
+        gsm._last_play_player_index = None
+        gsm._consecutive_passes = 0
+        gsm._turn_number = 0
+
+        # Register websocket in room_sockets so _handle_auto_play can find room
+        gs._room_sockets[room_id] = {pid1: ws1, pid2: ws2, pid3: ws3}
+        gs._player_room[pid1] = room_id
+
+        # Toggle托管 ON for Alice (this triggers auto_play immediately)
+        await gs._handle_auto_play(ws1, pid1)
+
+        # Round should have ended
+        assert gsm._phase.value == "ROUND_END", (
+            f"Expected ROUND_END after托管 wins via _handle_auto_play, "
+            f"got {gsm._phase.value}"
+        )
+
+        # Round history should have entry
+        assert len(gsm._round_history) > 0
+        last_round = gsm._round_history[-1]
+        assert "score_deltas" in last_round
