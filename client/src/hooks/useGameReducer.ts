@@ -29,12 +29,9 @@ function gameReducer(
 ): GameReducerState {
   switch (action.type) {
     case 'SET_GAME_STATE': {
-      // Keep roundResult while still in ROUND_END phase so the
-      // score overlay doesn't reset to +0 when players click ready.
-      const nextPhase = action.payload.phase;
-      const prevPhase = state.gameState?.phase;
-      const keepResult =
-        prevPhase === 'ROUND_END' && nextPhase === 'ROUND_END';
+      // Keep roundResult while in ROUND_END phase so score overlay
+      // doesn't reset to +0 when STATE_SYNC arrives.
+      const keepResult = action.payload.phase === 'ROUND_END';
       return {
         ...state,
         gameState: action.payload,
