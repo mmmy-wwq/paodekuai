@@ -20,7 +20,7 @@ class ScoringEngine:
     # ------------------------------------------------------------------
 
     @staticmethod
-    def get_tier(remaining_cards: int) -> int:
+    def get_tier(remaining_cards: int, cards_per_player: int) -> int:
         """Return the point tier for a given number of remaining cards.
 
         Tier mapping (the amount the winner collects from ONE player):
@@ -34,10 +34,13 @@ class ScoringEngine:
         +-------------------+-------+
         | 6–10              |   2   |
         +-------------------+-------+
-        | 11–15             |   3   |
+        | 11 to < start     |   3   |
         +-------------------+-------+
-        | ≥ 16               |   4   |
+        | = start (0 played)|   4   |
         +-------------------+-------+
+
+        Tier 4 only when the player played ZERO cards
+        (remaining == cards_per_player).
         """
         if remaining_cards < 5:
             return 0
@@ -45,8 +48,9 @@ class ScoringEngine:
             return 1
         if remaining_cards <= 10:
             return 2
-        if remaining_cards <= 15:
+        if remaining_cards < cards_per_player:
             return 3
+        # Played zero cards
         return 4
 
     # ------------------------------------------------------------------
@@ -57,6 +61,7 @@ class ScoringEngine:
     def calculate_normal_score(
         winner_id: str,
         players: List[dict],
+        cards_per_player: int,
     ) -> Dict[str, int]:
         """Calculate score changes after a normal (non-宣言) round.
 
@@ -65,6 +70,8 @@ class ScoringEngine:
             players: List of dicts, each with at least::
 
                 {"player_id": str, "remaining_cards": int}
+
+            cards_per_player: Starting hand size.
 
         Returns:
             Mapping ``player_id → score delta``.
@@ -108,7 +115,7 @@ class ScoringEngine:
         # --- Standard scoring ------------------------------------------------
         scores = {winner_id: 0}
         for p in losers:
-            tier = ScoringEngine.get_tier(p["remaining_cards"])
+            tier = ScoringEngine.get_tier(p["remaining_cards"], cards_per_player)
             if tier > 0:
                 scores[p["player_id"]] = -tier
                 scores[winner_id] += tier

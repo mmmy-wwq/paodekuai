@@ -11,14 +11,47 @@ for easy consumption by network/serialization layers.
 
 from __future__ import annotations
 
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Set
 
-from server.card_engine.card import Card
+from server.card_engine.card import Card, Rank
 from server.card_engine.deck import build_deck, deal_cards as deal
 from server.card_engine.recognizer import identify, get_pattern_display_name
 from server.game_engine.scorer import ScoringEngine
 from server.models import GamePhase
 from server.rule_engine.rules import RuleConfig, RuleEngine
+
+
+# ---------------------------------------------------------------------------
+# Announcement sound helpers
+# ---------------------------------------------------------------------------
+
+_ROLE_MAP: dict[str, str] = {
+    "爸爸": "dad",
+    "妈妈": "mom",
+    "姐姐": "sister",
+    "弟弟": "brother",
+}
+
+
+def _get_role_dir(player_name: str) -> str:
+    """Map a player's Chinese name to a sound role subdirectory."""
+    return _ROLE_MAP.get(player_name, "default")
+
+
+def _pattern_to_sound_file(pattern_type_name: str, main_rank: int) -> str:
+    """Map an identified pattern to a filename stem (without .mp3)."""
+    mapping: dict[str, str] = {
+        "SINGLE": f"single_{Rank(main_rank).name}",
+        "PAIR": f"pair_{Rank(main_rank).name}",
+        "CONSECUTIVE_PAIRS": "consecutive_pairs",
+        "STRAIGHT": "straight",
+        "TRIPLE_WITH_TWO": f"triple_{Rank(main_rank).name}",
+        "FOUR_WITH_THREE": "four_with_three",
+        "AIRPLANE": "airplane",
+        "BOMB": "bomb",
+        "ACE_BOMB": "ace_bomb",
+    }
+    return mapping.get(pattern_type_name, "")
 
 
 # ---------------------------------------------------------------------------
@@ -91,6 +124,12 @@ class GameStateManager:
         # Per-player last play/action tracking for frontend display
         self._player_last_plays: Dict[int, Optional[Dict[str, Any]]] = {}
         self._player_last_actions: Dict[int, Optional[str]] = {}  # 'play' | 'pass'
+        self._all_pass_last_player: Optional[int] = None
+        # Server-driven sound announcement: set after each play/pass/declare.
+        # Client plays this exact file — no pattern detection needed.
+        self._announcement_sound: str = ""
+        # Auto-play (托管) mode: set of player_ids that are in auto-play
+        self._auto_play_players: Set[str] = set()
 
     # ── Phase helpers ──────────────────────────────────────────────
 
@@ -224,6 +263,8 @@ class GameStateManager:
         self._turn_number = 0
         self._player_last_plays = {}
         self._player_last_actions = {}
+        self._announcement_sound = ""
+        self._auto_play_players.clear()  # new round: clear auto-play
         self._declarer_id = None
         self._declaration_turn = self._rule_engine.determine_first_player(
             players=[
@@ -295,6 +336,9 @@ class GameStateManager:
 
         self._players[target_index]["declaration"] = is_declaring
         print(f"[DECLARE_STATE] player={player_id[:8]} chose is_declaring={is_declaring}")
+        # Set announcement sound for declaration
+        role = _get_role_dir(self._players[target_index]["name"])
+        self._announcement_sound = f"{role}/declare_{'yes' if is_declaring else 'no'}"
 
         if is_declaring:
             if self._declarer_id is None:
@@ -310,7 +354,8 @@ class GameStateManager:
         # ── Advance to next player ─────────────────────────────────
         n = len(self._players)
         for _ in range(n):
-            self._declaration_turn = (self._declaration_turn + 1) % n
+            # Counter-clockwise (matches play direction)
+            self._declaration_turn = (self._declaration_turn - 1) % n
             if self._players[self._declaration_turn]["declaration"] is None:
                 break
 
@@ -491,6 +536,15 @@ class GameStateManager:
         # Record per-player last play for frontend display
         self._player_last_plays[self._current_turn] = self._serialize_last_play()
         self._player_last_actions[self._current_turn] = 'play'
+        # Clear all-pass tracking (someone played)
+        self._all_pass_last_player = None
+        # Set announcement sound (server-driven)
+        if identified is not None:
+            stem = _pattern_to_sound_file(identified.type.name, identified.main_rank)
+            role = _get_role_dir(current_player["name"])
+            self._announcement_sound = f"{role}/{stem}" if stem else ""
+        else:
+            self._announcement_sound = ""
 
         # ── 7. Declaration break check ─────────────────────────────
         # In declaration (包牌) mode: a non-declarer playing ANY card
@@ -581,13 +635,18 @@ class GameStateManager:
         self._turn_number += 1
         # Record per-player pass action
         self._player_last_actions[self._current_turn] = 'pass'
+        # Set announcement sound "过" in the player's voice
+        role = _get_role_dir(current_player["name"])
+        self._announcement_sound = f"{role}/pass"
 
         active_count = self._count_active_players()
         expected_passes = active_count - 1  # all except last_play player
 
         if self._consecutive_passes >= expected_passes and self._last_play_player_index is not None:
             # ── All-passed: last player who played gets free turn ──
-            # Clear all per-player last play records (table reset)
+            # Record the last passer so the client can announce "过",
+            # but still clear _player_last_actions (UI shows clean table).
+            self._all_pass_last_player = self._current_turn
             self._player_last_plays = {}
             self._player_last_actions = {}
             free_turn_player = self._last_play_player_index
@@ -626,16 +685,26 @@ class GameStateManager:
             "message": "Pass accepted.",
         }
 
+    def toggle_auto_play(self, player_id: str) -> Dict[str, Any]:
+        """Toggle auto-play mode for a player. Returns the new state."""
+        if player_id in self._auto_play_players:
+            self._auto_play_players.discard(player_id)
+            enabled = False
+        else:
+            self._auto_play_players.add(player_id)
+            enabled = True
+        print(f"[AUTO_PLAY] player={player_id[:8]} {'enabled' if enabled else 'disabled'}")
+        return {"success": True, "auto_play_enabled": enabled}
+
     def auto_play(self, player_id: str) -> Dict[str, Any]:
-        """Auto-play on timeout.
+        """Auto-play on timeout or托管.
 
         Logic:
-          1. If there is a last_play on the table → check must-play rule:
-             - Must-play triggered → play the forced card(s).
-             - Not triggered → pass.
+          1. If there is a last_play on the table → find ANY legal play
+             that can beat it.  Play the first one found.  If none → pass.
           2. If free play (no last_play) → check free-play must-play:
-             - Next player (counter-clockwise) has exactly 1 card → play highest single.
-             - Otherwise → play the smallest single card.
+              - Next player (counter-clockwise) has exactly 1 card → play highest single.
+              - Otherwise → play the smallest single card.
         """
         self._require_phase(GamePhase.PLAYING)
 
@@ -648,11 +717,13 @@ class GameStateManager:
             return {"success": False, "error": "No cards remaining"}
 
         if self._last_play_cards is not None:
-            # ── Table has cards: check must-play (必压) rule ──────────
+            # ── Table has cards: find any legal play ───────────────────
             last_play_pattern = identify(
                 self._last_play_cards,
                 player_count=self._config.player_count,
             )
+
+            # Check must-play rule first
             must_play_state = self._build_must_play_state()
             must_result = self._rule_engine.check_must_play(
                 hand=hand,
@@ -663,7 +734,23 @@ class GameStateManager:
             if must_result.get("triggered"):
                 forced = must_result["forced_cards"]
                 return self.play_turn(player_id, forced)
-            # Not forced → can pass
+
+            # Try to find any playable card that beats the last play
+            legal_plays = self._rule_engine.get_legal_plays(
+                hand=hand,
+                last_play_pattern=last_play_pattern,
+                player_count=self._config.player_count,
+            )
+            if legal_plays:
+                # Sort by pattern size then highest rank ascending
+                # so we play the SMALLEST card that beats the last play
+                legal_plays.sort(key=lambda cards: (
+                    len(cards),
+                    max(c.rank.value for c in cards),
+                ))
+                return self.play_turn(player_id, legal_plays[0])
+
+            # Nothing beats → pass
             return self.pass_turn(player_id)
         else:
             # ── Free play: check if next player has 1 card ────────────
@@ -673,7 +760,7 @@ class GameStateManager:
                 # Must play highest single
                 forced_single = max(hand, key=lambda c: (c.rank.value, c.suit.value))
                 return self.play_turn(player_id, [forced_single])
-            # Normal free play: play the smallest single (hand[0])
+            # Free play: play the smallest single
             return self.play_turn(player_id, [hand[0]])
 
     def end_round(self) -> Dict[str, Any]:
@@ -749,6 +836,7 @@ class GameStateManager:
             score_deltas = self._scorer.calculate_normal_score(
                 winner_id=winner_id,
                 players=scorer_players,
+                cards_per_player=self._config.cards_per_player,
             )
             is_declaration_game = False
 
@@ -819,6 +907,7 @@ class GameStateManager:
         # Clear per-player last play records for the new round
         self._player_last_plays = {}
         self._player_last_actions = {}
+        self._all_pass_last_player = None
 
         self._round_number += 1
         self._phase = GamePhase.DEALING
@@ -882,6 +971,12 @@ class GameStateManager:
                 self._players[i]["player_id"]: self._player_last_actions.get(i)
                 for i in range(len(self._players))
             },
+            "all_pass_last_player": (
+                self._players[self._all_pass_last_player]["player_id"]
+                if self._all_pass_last_player is not None else None
+            ),
+            "announcement_sound": self._announcement_sound,
+            "auto_play_players": list(self._auto_play_players),
         }
 
         return state
