@@ -280,26 +280,6 @@ class GameServer:
         task = asyncio.create_task(_watchdog())
         self._disconnect_watchdogs[player_id] = task
 
-        # ── If no one left connected, clean up room immediately ────────
-        remaining_sockets = self._room_sockets.get(room_id, {})
-        if not remaining_sockets:
-            # Cancel all watchdogs for this room
-            for pid in list(self._disconnect_watchdogs.keys()):
-                p_room = self._player_room.get(pid)
-                if p_room == room_id:
-                    wd = self._disconnect_watchdogs.pop(pid, None)
-                    if wd:
-                        wd.cancel()
-                    self._reconnect_tokens.pop(pid, None)
-            # Remove all players from room
-            room = await self._rm.get_room(room_id)
-            if room:
-                for pid in list(room.players.keys()):
-                    await self._rm.leave_room(room_id, pid)
-            # Cancel turn timer
-            self._cancel_turn_timer(room_id)
-            print(f"[DISCONNECT] All players gone, room {room_id} cleaned up")
-
         # ── Broadcast updated state (other players see "暂离") ─────────
         await self.broadcast_state(room_id)
 
