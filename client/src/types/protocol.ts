@@ -26,6 +26,7 @@ export enum MsgType {
   PLAYER_JOINED = 'PLAYER_JOINED',
   PLAYER_LEFT = 'PLAYER_LEFT',
   READY = 'READY',
+  AUTO_PLAY = 'AUTO_PLAY',
 }
 
 // ── Message envelope ───────────────────────────────────────────────────────

@@ -425,6 +425,31 @@ class TestHintEdgeCases:
 class TestHintAirplane:
     """飞机带翅膀的提示测试。"""
 
+    def test_airplane_2_triples_10_cards_normal(self, engine_3p):
+        """正常出牌：飞机带翅膀最少10张(2三条+4踢脚)。"""
+        cards = [c('THREE', S), c('THREE', H), c('THREE', C),
+                 c('FOUR', S), c('FOUR', H), c('FOUR', C),
+                 c('SEVEN', S), c('SEVEN', H),
+                 c('EIGHT', S), c('EIGHT', H)]
+        pattern = identify(cards, player_count=3)
+        assert pattern is not None and pattern.type == PatternType.AIRPLANE
+
+    def test_airplane_2_triples_6_cards_last_hand(self, engine_3p):
+        """最后一手：飞机带翅膀最少6张(2三条无踢脚)，is_last_hand=True时允许。"""
+        cards = [c('THREE', S), c('THREE', H), c('THREE', C),
+                 c('FOUR', S), c('FOUR', H), c('FOUR', C)]
+        pattern = identify(cards, player_count=3, is_last_hand=True)
+        assert pattern is not None and pattern.type == PatternType.AIRPLANE
+        assert pattern.length == 2
+
+    def test_airplane_2_triples_8_cards_last_hand(self, engine_3p):
+        """最后一手：8张飞机(2三条+2踢脚)也应合法。"""
+        cards = [c('THREE', S), c('THREE', H), c('THREE', C),
+                 c('FOUR', S), c('FOUR', H), c('FOUR', C),
+                 c('EIGHT', S), c('NINE', H)]
+        pattern = identify(cards, player_count=3, is_last_hand=True)
+        assert pattern is not None and pattern.type == PatternType.AIRPLANE
+
     def test_free_play_includes_airplane(self, engine_3p):
         """自由出牌：提示应包含飞机带翅膀。"""
         hand = [c('THREE', S), c('THREE', H), c('THREE', C),
@@ -695,3 +720,109 @@ class TestHintNoPlays:
                         player_count=3)
         plays = engine_3p.get_legal_plays(hand, last_play_pattern=last, player_count=3)
         assert len(plays) == 0
+
+
+# ═══════════════════════════════════════════════════════════════════════
+# Test Case 16: Client-side bug regression tests
+# ═══════════════════════════════════════════════════════════════════════
+
+class TestBugRegressionTripleWithTwo:
+    """三带二场景回归测试（客户端容易出bug的地方）。"""
+
+    def test_triple_two_with_diff_rank_kickers_correct_pattern(self, engine_3p):
+        """三带二555+34（踢脚不同点数）应被正确识别。"""
+        cards = [c('FIVE', S), c('FIVE', H), c('FIVE', C),
+                 c('THREE', S), c('FOUR', H)]
+        pattern = identify(cards, player_count=3)
+        assert pattern is not None, "555+34应被识别为三带二"
+        assert pattern.type == PatternType.TRIPLE_WITH_TWO, f"应为TRIPLE_WITH_TWO, 实际为{pattern.type}"
+        assert pattern.main_rank == Rank.FIVE.value
+
+    def test_triple_two_with_diff_rank_kickers_beating(self, engine_3p):
+        """三带二555+34在桌 → 手牌有777+89应能压过。"""
+        hand = [c('SEVEN', S), c('SEVEN', H), c('SEVEN', C),
+                c('EIGHT', S), c('NINE', H),
+                c('THREE', D)]
+        last = identify([c('FIVE', S), c('FIVE', H), c('FIVE', C),
+                         c('THREE', S), c('FOUR', H)])
+        assert last is not None and last.type == PatternType.TRIPLE_WITH_TWO
+        plays = engine_3p.get_legal_plays(hand, last_play_pattern=last, player_count=3)
+        triple_two = [p for p in plays if len(p) == 5]
+        assert len(triple_two) >= 1, f"应包含777+89三带二, 结果: {plays}"
+
+    def test_triple_two_beats_with_bomb(self, engine_3p):
+        """三带二555+34在桌 → 手牌只有炸弹也能压。"""
+        hand = [c('THREE', S), c('THREE', H), c('THREE', C), c('THREE', D)]
+        last = identify([c('FIVE', S), c('FIVE', H), c('FIVE', C),
+                         c('SIX', S), c('SEVEN', H)])
+        assert last is not None
+        plays = engine_3p.get_legal_plays(hand, last_play_pattern=last, player_count=3)
+        bombs = [p for p in plays if len(p) == 4]
+        assert len(bombs) >= 1, "面对三带二应有炸弹提示"
+
+
+class TestBugRegressionFourWithThree:
+    """四带三场景回归测试（客户端容易出bug的地方）。"""
+
+    def test_four_three_with_diff_rank_kickers_correct_pattern(self, engine_3p):
+        """四带三4444+567（踢脚不同点数）应被正确识别。"""
+        cards = [c('FOUR', S), c('FOUR', H), c('FOUR', C), c('FOUR', D),
+                 c('FIVE', S), c('SIX', H), c('SEVEN', C)]
+        pattern = identify(cards, player_count=3)
+        assert pattern is not None, "4444+567应被识别为四带三"
+        assert pattern.type == PatternType.FOUR_WITH_THREE, f"应为FOUR_WITH_THREE, 实际为{pattern.type}"
+        assert pattern.main_rank == Rank.FOUR.value
+
+    def test_four_three_with_diff_rank_kickers_beating(self, engine_3p):
+        """四带三4444+567在桌 → 手牌有7777+8910应能压过。"""
+        hand = [c('SEVEN', S), c('SEVEN', H), c('SEVEN', C), c('SEVEN', D),
+                c('EIGHT', S), c('NINE', H), c('TEN', C)]
+        last = identify([c('FOUR', S), c('FOUR', H), c('FOUR', C), c('FOUR', D),
+                         c('FIVE', S), c('SIX', H), c('SEVEN', C)],
+                        player_count=3)
+        assert last is not None and last.type == PatternType.FOUR_WITH_THREE
+        plays = engine_3p.get_legal_plays(hand, last_play_pattern=last, player_count=3)
+        four_three = [p for p in plays if len(p) == 7]
+        assert len(four_three) >= 1, f"应包含7777+8910四带三, 结果: {plays}"
+
+
+class TestBugRegressionBombAndAceBomb:
+    """炸弹与A炸的正确识别回归测试。"""
+
+    def test_four_twos_is_bomb_not_ace_bomb(self, engine_3p):
+        """4张2（TWO）是普通炸弹，不是A炸。"""
+        cards = [c('TWO', S), c('TWO', H), c('TWO', C), c('TWO', D)]
+        pattern = identify(cards, player_count=3)
+        assert pattern is not None, "4张2应被识别"
+        assert pattern.type == PatternType.BOMB, f"4张2应为BOMB, 实际为{pattern.type}"
+        assert pattern.length == 4
+
+    def test_three_aces_is_ace_bomb(self, engine_3p):
+        """3张A是A炸。"""
+        cards = [c('ACE', S), c('ACE', H), c('ACE', C)]
+        pattern = identify(cards, player_count=3)
+        assert pattern is not None, "3张A应被识别"
+        assert pattern.type == PatternType.ACE_BOMB, f"3张A应为ACE_BOMB, 实际为{pattern.type}"
+        assert pattern.length == 3
+
+    def test_ace_bomb_not_available_in_4p(self, engine_4p):
+        """4人模式没有A炸（只有普通炸弹）。"""
+        cards = [c('ACE', S), c('ACE', H), c('ACE', C)]
+        pattern = identify(cards, player_count=4)
+        assert pattern is None, "4人模式下3张A不应被识别（没有A炸）"
+
+    def test_four_twos_bomb_beats_other_bombs(self, engine_3p):
+        """4张2作为炸弹，能压过更小的炸弹。"""
+        hand = [c('TWO', S), c('TWO', H), c('TWO', C), c('TWO', D)]
+        last = identify([c('FIVE', S), c('FIVE', H), c('FIVE', C), c('FIVE', D)])
+        assert last is not None and last.type == PatternType.BOMB
+        plays = engine_3p.get_legal_plays(hand, last_play_pattern=last, player_count=3)
+        assert len(plays) >= 1, "4张2作为炸弹应能压过炸弹5"
+
+    def test_four_twos_bomb_in_free_play(self, engine_3p):
+        """自由出牌时4张2应作为炸弹提示。"""
+        hand = [c('TWO', S), c('TWO', H), c('TWO', C), c('TWO', D),
+                c('THREE', S)]
+        plays = engine_3p.get_legal_plays(hand, last_play_pattern=None, player_count=3)
+        bomb_plays = [p for p in plays if len(p) == 4]
+        assert len(bomb_plays) >= 1, "自由出牌应有4张2炸弹提示"

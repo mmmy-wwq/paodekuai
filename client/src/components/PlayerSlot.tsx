@@ -24,6 +24,8 @@ interface PlayerSlotProps {
   declaration?: boolean | null
   /** Declaration phase: this player is currently choosing */
   isDeclarationTurn?: boolean
+  /** Whether this player is in auto-play (托管) mode */
+  isAutoPlaying?: boolean
 }
 
 /** Mini-card used inside opponent last-play display. */
@@ -47,7 +49,7 @@ function avatarSizeFor(position: string): number {
 }
 
 /** Renders a single player's slot: avatar, name, scores, play area. */
-function PlayerSlot({ name, cardCount, isActive, isDeclarer, position, lastPlay, lastAction, isMyTurn = false, countdown, sessionScore, historicalScore, remainingCards, declaration, isDeclarationTurn }: PlayerSlotProps) {
+function PlayerSlot({ name, cardCount, isActive, isDeclarer, position, lastPlay, lastAction, isMyTurn = false, countdown, sessionScore, historicalScore, remainingCards, declaration, isDeclarationTurn, isAutoPlaying = false }: PlayerSlotProps) {
   const avatarSize = avatarSizeFor(position)
   // Layout direction: play area should face the table center
   const layoutClass = 
@@ -114,6 +116,7 @@ function PlayerSlot({ name, cardCount, isActive, isDeclarer, position, lastPlay,
           <span className="ps-name">
             {name}
             {isDeclarer && <span className="ps-declarer"> 🏆</span>}
+            {isAutoPlaying && <span className="ps-auto-badge"> 🤖</span>}
           </span>
           {/* Scores: 单轮 (session) + 累计 (historical) */}
           {(sessionScore !== undefined || historicalScore !== undefined) && (
@@ -163,6 +166,11 @@ function PlayerSlot({ name, cardCount, isActive, isDeclarer, position, lastPlay,
           <span className="ps-countdown">{countdown}s</span>
         )}
       </div>
+
+      {/* Auto-play overlay for own player */}
+      {isMe && isAutoPlaying && (
+        <div className="ps-auto-overlay">托管中</div>
+      )}
     </div>
   )
 }

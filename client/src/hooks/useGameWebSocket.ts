@@ -89,19 +89,28 @@ export function useGameWebSocket(roomId: string, playerName: string, playerCount
     sendMessage(MsgType.READY, {});
   }, [sendMessage]);
 
+  /** Toggle auto-play (托管) mode. */
+  const sendAutoPlay = useCallback(() => {
+    sendMessage(MsgType.AUTO_PLAY, {});
+  }, [sendMessage]);
+
   // ── Connection management ───────────────────────────────────────────
 
-  /** Retrieve stored PID for this player name, if any. */
-  function getStoredPid(name: string): string {
+  /** Retrieve stored PID + reconnect token for this player name. */
+  function getStoredCredentials(name: string): { pid: string; token: string } {
     try {
-      return localStorage.getItem(`pdq_pid_${name}`) || ''
-    } catch { return '' }
+      return {
+        pid: localStorage.getItem(`pdq_pid_${name}`) || '',
+        token: localStorage.getItem(`pdq_token_${name}`) || '',
+      }
+    } catch { return { pid: '', token: '' } }
   }
 
-  /** Save PID for this player name so they can reconnect. */
-  function saveStoredPid(name: string, pid: string): void {
+  /** Save PID + reconnect token for reconnection support. */
+  function saveCredentials(name: string, pid: string, token: string): void {
     try {
       localStorage.setItem(`pdq_pid_${name}`, pid)
+      if (token) localStorage.setItem(`pdq_token_${name}`, token)
     } catch { /* ignore quota errors */ }
   }
 
@@ -117,9 +126,10 @@ export function useGameWebSocket(roomId: string, playerName: string, playerCount
       wsRef.current.close();
     }
 
-    const storedPid = getStoredPid(playerName)
+    const { pid: storedPid, token: storedToken } = getStoredCredentials(playerName)
     const params = new URLSearchParams({ name: playerName, players: String(playerCount) })
     if (storedPid) params.append('pid', storedPid)
+    if (storedToken) params.append('token', storedToken)
     const ws = new WebSocket(`${WS_BASE}/ws/${roomId}?${params}`);
     wsRef.current = ws;
 
@@ -144,9 +154,9 @@ export function useGameWebSocket(roomId: string, playerName: string, playerCount
           case MsgType.STATE_SYNC: {
             const gs = msg.payload as GameState;
             console.log('[WS] STATE_SYNC received, phase=', gs.phase, 'your_player_id=', gs.your_player_id)
-            // Store player PID for reconnection
+            // Store player PID + reconnect token for reconnection
             if (gs.your_player_id) {
-              saveStoredPid(playerName, gs.your_player_id)
+              saveCredentials(playerName, gs.your_player_id, gs.reconnect_token || '')
             }
             dispatch({ type: 'SET_GAME_STATE', payload: gs });
             break;
@@ -228,6 +238,7 @@ export function useGameWebSocket(roomId: string, playerName: string, playerCount
     sendPass,
     sendDeclare,
     sendReady,
+    sendAutoPlay,
     isConnected: state.isConnected,
     dispatch,
   } as const;

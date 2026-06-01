@@ -396,8 +396,9 @@ class TestAllPassFreePlay:
         assert result["success"] is True
 
         assert result.get("all_passed") is True
-        assert len(gsm_3p._player_last_plays) == 0  # 全过清空
-        assert len(gsm_3p._player_last_actions) == 0
+        assert len(gsm_3p._player_last_plays) == 0  # 全过清空 last_plays
+        assert len(gsm_3p._player_last_actions) == 0  # UI 上也清空
+        assert gsm_3p._all_pass_last_player is not None  # 但保留了最后过牌人索引
 
 
 # ═══════════════════════════════════════════════════════════════════════

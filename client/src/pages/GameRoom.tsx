@@ -105,14 +105,16 @@ function GameRoom() {
     sendPass,
     sendDeclare,
     sendReady,
+    sendAutoPlay,
     isConnected,
     dispatch,
   } = useGameWebSocket(id || '', playerName, playerCount)
 
   // ── Sound effects ──────────────────────────────────────────
-  const { playCardSound, playPassSound, speakPattern } = useSoundEffects()
-  const prevTurnRef = useRef(0)
-  const prevActionsRef = useRef<Record<string, string | null>>({})
+  const { playCardSound, playAnnouncement, warmup } = useSoundEffects()
+  /** Keep AudioContext alive. Call on every user gesture. */
+  const ensureAudioWarm = useCallback(() => { warmup() }, [warmup])
+  const prevAnnounceRef = useRef('')
 
   // ── Hint cycle (方案A: frontend local calculation) ─────────
   const { nextHint, resetHint } = useHintCycle()
@@ -156,31 +158,25 @@ function GameRoom() {
     }
   }, [gameState?.phase])
 
-  // ── Sound effect trigger on action changes ─────────────────
+  // ── Server‑driven sound trigger ───────────────────────────
+  // Every STATE_SYNC carries an announcement_sound (e.g. "dad/single_KING").
+  // Client plays it directly — zero pattern detection or player matching.
 
   useEffect(() => {
-    if (!gameState || gameState.phase !== 'PLAYING') return
-    const actions = gameState.player_last_actions || {}
-    const turnNum = gameState.turn_number ?? 0
+    if (!gameState) return
+    const sound = gameState.announcement_sound
+    if (!sound || sound === prevAnnounceRef.current) return
+    prevAnnounceRef.current = sound
 
-    if (turnNum !== prevTurnRef.current) {
-      for (const pid of Object.keys(actions)) {
-        const action = actions[pid]
-        const prev = prevActionsRef.current[pid]
-        if (action !== prev && action === 'play') {
-          playCardSound()
-          const playedCards = (gameState.player_last_plays?.[pid]?.cards) || []
-          if (playedCards.length > 0) speakPattern(playedCards)
-          break
-        } else if (action !== prev && action === 'pass') {
-          playPassSound()
-          break
-        }
-      }
-      prevActionsRef.current = JSON.parse(JSON.stringify(actions))
-      prevTurnRef.current = turnNum
+    // The "pia" card sound still plays alongside announcements
+    const actions = gameState.player_last_actions || {}
+    for (const action of Object.values(actions)) {
+      if (action === 'play') { playCardSound(); break }
     }
-  }, [gameState, playCardSound, playPassSound])
+
+    // Play the server‑specified announcement
+    playAnnouncement(sound)
+  }, [gameState, playCardSound, playAnnouncement])
 
   // ── Local countdown timer (after phase declared below) ──
   const [localCountdown, setLocalCountdown] = useState(0)
@@ -297,25 +293,27 @@ function GameRoom() {
 
   const handlePlay = useCallback(() => {
     if (selectedCardIds.size === 0 || !isMyTurn) return
+    ensureAudioWarm()
     const cards = [...selectedCardIds]
       .sort((a, b) => a - b)
       .map((i) => sortedHand[i])
     sendPlay(cards)
-    // Speak my own play directly from user-gesture context (required by mobile)
-    speakPattern(cards)
+    // Announcement is handled by the STATE_SYNC useEffect below (single fire)
     dispatch({ type: 'CLEAR_SELECTION' })
     resetHint()
-  }, [selectedCardIds, isMyTurn, sortedHand, sendPlay, dispatch, resetHint, speakPattern])
+  }, [selectedCardIds, isMyTurn, sortedHand, sendPlay, dispatch, resetHint, ensureAudioWarm])
 
   const handlePass = useCallback(() => {
     if (!isMyTurn) return
+    ensureAudioWarm()
     sendPass()
     dispatch({ type: 'CLEAR_SELECTION' })
     resetHint()
-  }, [isMyTurn, sendPass, dispatch, resetHint])
+  }, [isMyTurn, sendPass, dispatch, resetHint, ensureAudioWarm])
 
   const handleHint = useCallback(() => {
     if (phase !== 'PLAYING' || !isMyTurn || myHand.length === 0) return
+    ensureAudioWarm()
     const lastPlay = gameState?.last_play ?? null
     // nextHint returns indices into the SORTED hand (matching sortedHand order)
     const indices = nextHint(sortedHand, lastPlay)
@@ -323,14 +321,23 @@ function GameRoom() {
     for (const idx of indices) {
       dispatch({ type: 'SELECT_CARD', payload: idx })
     }
-  }, [phase, isMyTurn, myHand.length, sortedHand, gameState?.last_play, nextHint, dispatch])
+  }, [phase, isMyTurn, myHand.length, sortedHand, gameState?.last_play, nextHint, dispatch, ensureAudioWarm])
 
   const handleDeclare = useCallback(
     (isDeclaring: boolean) => {
+      ensureAudioWarm()
       sendDeclare(isDeclaring)
     },
-    [sendDeclare],
+    [sendDeclare, ensureAudioWarm],
   )
+
+  const handleAutoPlay = useCallback(() => {
+    ensureAudioWarm()
+    sendAutoPlay()
+  }, [sendAutoPlay, ensureAudioWarm])
+
+  const autoPlayPlayers: string[] = gameState?.auto_play_players ?? []
+  const isAutoPlaying = autoPlayPlayers.includes(myPlayerId)
 
   const canPlay = selectedCardIds.size > 0 && isMyTurn && phase === 'PLAYING'
 
@@ -426,9 +433,16 @@ function GameRoom() {
             </button>
           </div>
         </div>
-        {/* Right: 提示 */}
+        {/* Right: 托管 + 提示 */}
         <div className="action-side action-side--right">
           <div className="action-side__body">
+            <button
+              className={`btn-action ${isAutoPlaying ? 'btn-action--auto-on' : 'btn-action--auto-off'}`}
+              disabled={phase !== 'PLAYING'}
+              onClick={handleAutoPlay}
+            >
+              {isAutoPlaying ? '⏹ 托管' : '🤖 托管'}
+            </button>
             <button className="btn-action btn-action--hint" disabled={!isMyTurn} onClick={handleHint}>
               提示
             </button>
@@ -460,13 +474,16 @@ function GameRoom() {
                 countdown={gameState.current_turn === p.player_id ? localCountdown : undefined}
                 sessionScore={p.score}
                 historicalScore={histScore}
+                isAutoPlaying={autoPlayPlayers.includes(p.player_id)}
               />
             )
           })}
 
           {/* Center turn indicator — arrow points to current player */}
           <div className="game-table__center-indicator">
-            <div className={`game-table__arrow game-table__arrow--${playerPositions[gameState?.current_turn ?? ''] || 'top'}`} />
+            <div className="game-table__arrow-ring">
+              <div className={`game-table__arrow game-table__arrow--${playerPositions[gameState?.current_turn ?? ''] || 'top'}`} />
+            </div>
           </div>
 
           {/* Center top info bar */}
@@ -592,6 +609,7 @@ function GameRoom() {
     const iAmReady = readyPlayers.includes(myPlayerId)
 
     const handleReady = () => {
+      ensureAudioWarm()
       setReadyClicked(true)
       sendReady()
     }
@@ -741,7 +759,9 @@ function GameRoom() {
           <div className="game-table__center-indicator">
             {!allDeclaredPlayers && (
               <>
+              <div className="game-table__arrow-ring">
                 <div className={`game-table__arrow game-table__arrow--${playerPositions[declPlayerId ?? ''] || 'top'}`} />
+              </div>
                 <div className="game-table__turn-info">
                   <span className="game-table__turn-desc">包牌者必须先出完所有牌</span>
                 </div>

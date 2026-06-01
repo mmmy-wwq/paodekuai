@@ -240,16 +240,27 @@ input {
   border-right: 16px solid transparent;
   border-bottom: 28px solid var(--accent-gold);
   filter: drop-shadow(0 0 10px rgba(200, 150, 46, 0.6));
-  animation: ps-prompt-pulse 1.2s ease-in-out infinite;
   transition: transform 0.3s ease;
 }
 /* Position-based rotations: arrow points FROM center TOWARD player */
-.game-table__arrow--top     { transform: rotate(0deg); }    /* up */
-.game-table__arrow--top-right { transform: rotate(45deg); }   /* up-right */
-.game-table__arrow--right   { transform: rotate(90deg); }   /* right */
-.game-table__arrow--top-left  { transform: rotate(-45deg); }  /* up-left */
-.game-table__arrow--left    { transform: rotate(-90deg); }  /* left */
-.game-table__arrow--me      { transform: rotate(180deg); }  /* down */
+.game-table__arrow--top      { transform: rotate(0deg); }
+.game-table__arrow--top-right { transform: rotate(45deg); }
+.game-table__arrow--right    { transform: rotate(90deg); }
+.game-table__arrow--top-left { transform: rotate(-45deg); }
+.game-table__arrow--left     { transform: rotate(-90deg); }
+.game-table__arrow--me       { transform: rotate(180deg); }
+/* Pulse ring around arrow */
+.game-table__arrow-ring {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  border: 2px solid var(--accent-gold);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  animation: ps-prompt-pulse 1.2s ease-in-out infinite;
+  background: rgba(0, 0, 0, 0.2);
+}
 
 .game-table__turn-info {
   display: flex;
@@ -287,6 +298,10 @@ html.force-landscape .game-table__arrow {
   border-left-width: 12px;
   border-right-width: 12px;
   border-bottom-width: 22px;
+}
+html.force-landscape .game-table__arrow-ring {
+  width: 38px;
+  height: 38px;
 }
 html.force-landscape .game-table__start-hint {
   font-size: 18px;
@@ -517,7 +532,32 @@ html.force-landscape .gt-countdown {
   background: rgba(70, 130, 180, 0.2);
   color: #7ab8e0;
   border: 1px solid rgba(70, 130, 180, 0.4);
-  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.6);
+}
+
+.btn-action--hint:hover:not(:disabled) {
+  background: rgba(70, 130, 180, 0.12);
+}
+
+.btn-action--auto-off {
+  background: rgba(100, 180, 100, 0.15);
+  color: #6bc86b;
+  border: 1px solid rgba(100, 180, 100, 0.3);
+}
+
+.btn-action--auto-off:hover:not(:disabled) {
+  background: rgba(100, 180, 100, 0.1);
+}
+
+.btn-action--auto-on {
+  background: rgba(200, 150, 46, 0.25);
+  color: var(--accent-gold-light);
+  border: 1px solid var(--accent-gold);
+  animation: ps-auto-pulse 1.5s ease-in-out infinite;
+}
+
+@keyframes ps-auto-pulse {
+  0%, 100% { box-shadow: 0 0 6px rgba(200, 150, 46, 0.3); }
+  50% { box-shadow: 0 0 16px rgba(200, 150, 46, 0.7); }
 }
 
 .btn-action--hint:hover:not(:disabled) {

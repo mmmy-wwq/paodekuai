@@ -54,29 +54,43 @@ function identify(cards: Card[]): PatternInfo | null {
     if (n === 1) return { type: 'single', mainRank: r.rank, mainValue: r.value, length: 1 }
     if (n === 2) return { type: 'pair', mainRank: r.rank, mainValue: r.value, length: 2 }
     if (n === 3) return { type: 'triple', mainRank: r.rank, mainValue: r.value, length: 3 }
-    if (n === 4) {
-      if (r.rank === Rank.TWO) return { type: 'ace_bomb', mainRank: r.rank, mainValue: r.value, length: 4 }
-      return { type: 'bomb', mainRank: r.rank, mainValue: r.value, length: 4 }
+    // 4 same rank = BOMB (always, including TWO). ACE_BOMB handled below.
+    if (n === 4) return { type: 'bomb', mainRank: r.rank, mainValue: r.value, length: 4 }
+  }
+
+  // ── ACE_BOMB (A炸) ──────────────────────────────────────────────
+  // 3 Aces, only in 2 or 3 player mode (checked by caller context)
+  if (n === 3 && rankCounts.length === 1) {
+    const r = rankCounts[0]
+    if (r.rank === Rank.ACE) {
+      return { type: 'ace_bomb', mainRank: r.rank, mainValue: r.value, length: 3 }
     }
   }
 
-  // 2 distinct ranks → triple_with_two (3+2) or four_with_three (4+3)
-  if (rankCounts.length === 2) {
-    const bigger = rankCounts.find((x) => x.count >= 3)
-    if (bigger) {
-      const smaller = rankCounts.find((x) => x !== bigger)!
-      if (bigger.count === 3 && smaller.count === 2 && n === 5) {
-        return { type: 'triple_with_two', mainRank: bigger.rank, mainValue: bigger.value, length: 5 }
-      }
-      if (bigger.count === 4 && smaller.count === 3 && n === 7) {
-        return { type: 'four_with_three', mainRank: bigger.rank, mainValue: bigger.value, length: 7 }
-      }
+  // ── TRIPLE_WITH_TWO (三带二) ─────────────────────────────────────
+  // 5 cards, one rank appears exactly 3 times, kickers can be any 2 cards
+  if (n === 5) {
+    const tripleRank = rankCounts.find((r) => r.count === 3)
+    if (tripleRank) {
+      return { type: 'triple_with_two', mainRank: tripleRank.rank, mainValue: tripleRank.value, length: 5 }
+    }
+  }
+
+  // ── FOUR_WITH_THREE (四带三) ─────────────────────────────────────
+  // 7 cards, one rank appears exactly 4 times, kickers can be any 3 cards
+  if (n === 7) {
+    const fourRank = rankCounts.find((r) => r.count === 4)
+    if (fourRank) {
+      return { type: 'four_with_three', mainRank: fourRank.rank, mainValue: fourRank.value, length: 7 }
     }
   }
 
   // ── AIRPLANE (飞机带翅膀) ──────────────────────────────────────
-  // 2+ consecutive triples, no TWO, need 2 kickers per triple
-  if (n >= 8) {
+  // 2+ consecutive triples, no TWO.
+  // Normal play: exactly 2 kickers per triple.
+  // Last hand: 0 to 2 kickers per triple (server already validated).
+  // Client is permissive since it doesn't know is_last_hand.
+  if (n >= 6) {  // minimum: 2 triples = 6 cards (last hand, no kickers)
     const tripRanks = rankCounts
       .filter((r) => r.count >= 3 && r.value !== RANK_VALUE[Rank.TWO])
       .map((r) => r.value)
@@ -88,7 +102,7 @@ function identify(cards: Card[]): PatternInfo | null {
           const tripleCount = seg.length
           const coreCards = tripleCount * 3
           const kickers = n - coreCards
-          if (kickers === tripleCount * 2) {
+          if (kickers >= 0 && kickers <= tripleCount * 2) {
             return { type: 'airplane', mainRank: rankCounts.find((r) => r.value === seg[seg.length - 1])!.rank, mainValue: seg[seg.length - 1], length: tripleCount }
           }
         }
@@ -105,15 +119,15 @@ function identify(cards: Card[]): PatternInfo | null {
     return true
   }
 
-  if (n >= 5 && !vals.includes(RANK_VALUE[Rank.TWO]) && isConsecutive()) {
-    // All counts are 1 → straight
-    if (rankCounts.every((r) => r.count === 1)) {
-      return { type: 'straight', mainRank: rankCounts[0].rank, mainValue: vals[0], length: n }
-    }
-    // All counts are 2 → consecutive_pairs  
-    if (rankCounts.every((r) => r.count === 2)) {
-      return { type: 'consecutive_pairs', mainRank: rankCounts[0].rank, mainValue: vals[0], length: n }
-    }
+  // ── Consecutive pairs (连对): n ≥ 4 (2+ pairs), all counts = 2, consecutive, no 2 ──
+  // NOTE: separate from straight check because consecutive pairs work with n=4 (2 pairs)
+  if (n >= 4 && n % 2 === 0 && !vals.includes(RANK_VALUE[Rank.TWO]) && rankCounts.every((r) => r.count === 2) && isConsecutive()) {
+    return { type: 'consecutive_pairs', mainRank: rankCounts[0].rank, mainValue: vals[0], length: n }
+  }
+
+  // ── Straight (顺子): n ≥ 5, all counts = 1, consecutive, no 2 ──
+  if (n >= 5 && !vals.includes(RANK_VALUE[Rank.TWO]) && rankCounts.every((r) => r.count === 1) && isConsecutive()) {
+    return { type: 'straight', mainRank: rankCounts[0].rank, mainValue: vals[0], length: n }
   }
 
   return null
@@ -268,16 +282,16 @@ function genFreePlays(sorted: Card[]): number[][] {
     }
   }
 
-  // Bombs (normal)
-  for (const [rank, cards] of groups) {
-    if (cards.length >= 4 && rank !== Rank.TWO) {
+  // Bombs (4 same rank, any rank including TWO)
+  for (const [, cards] of groups) {
+    if (cards.length >= 4) {
       plays.push(cards.map((c) => sorted.indexOf(c)).slice(0, 4))
     }
   }
-  // Ace bomb
-  const aceGroup = groups.find(([r]) => r === Rank.TWO)
-  if (aceGroup && aceGroup[1].length >= 4) {
-    plays.push(aceGroup[1].map((c) => sorted.indexOf(c)).slice(0, 4))
+  // Ace bomb (3 Aces)
+  const aceBombGroup = groups.find(([r]) => r === Rank.ACE)
+  if (aceBombGroup && aceBombGroup[1].length >= 3) {
+    plays.push(aceBombGroup[1].map((c) => sorted.indexOf(c)).slice(0, 3))
   }
 
   return plays
@@ -291,16 +305,17 @@ function genBeating(sorted: Card[], target: PatternInfo): number[][] {
   const plays: number[][] = []
   const groups = groupByRank(sorted)
 
-  // Helper: add bombs (always beats non-bomb)
+  // Helper: add bombs (always beats non-bomb) and ace_bomb
   const addBombs = () => {
-    for (const [rank, cards] of groups) {
-      if (cards.length >= 4 && rank !== Rank.TWO) {
+    for (const [, cards] of groups) {
+      if (cards.length >= 4) {
         plays.push(cards.map((c) => sorted.indexOf(c)).slice(0, 4))
       }
     }
-    const aceG = groups.find(([r]) => r === Rank.TWO)
-    if (aceG && aceG[1].length >= 4) {
-      plays.push(aceG[1].map((c) => sorted.indexOf(c)).slice(0, 4))
+    // Ace bomb (3 Aces)
+    const aceG = groups.find(([r]) => r === Rank.ACE)
+    if (aceG && aceG[1].length >= 3) {
+      plays.push(aceG[1].map((c) => sorted.indexOf(c)).slice(0, 3))
     }
   }
 
@@ -310,13 +325,14 @@ function genBeating(sorted: Card[], target: PatternInfo): number[][] {
   // If target is bomb → only higher bomb or ace_bomb
   if (target.type === 'bomb') {
     for (const [rank, cards] of groups) {
-      if (cards.length >= 4 && RANK_VALUE[rank] > target.mainValue && rank !== Rank.TWO) {
+      if (cards.length >= 4 && RANK_VALUE[rank] > target.mainValue) {
         plays.push(cards.map((c) => sorted.indexOf(c)).slice(0, 4))
       }
     }
-    const aceG = groups.find(([r]) => r === Rank.TWO)
-    if (aceG && aceG[1].length >= 4) {
-      plays.push(aceG[1].map((c) => sorted.indexOf(c)).slice(0, 4))
+    // Ace bomb (3 Aces) beats everything, including bombs
+    const aceG = groups.find(([r]) => r === Rank.ACE)
+    if (aceG && aceG[1].length >= 3) {
+      plays.push(aceG[1].map((c) => sorted.indexOf(c)).slice(0, 3))
     }
     return plays
   }

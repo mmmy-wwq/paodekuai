@@ -93,6 +93,22 @@ export interface GameState {
 
   /** Turn countdown remaining seconds (server-side timer). */
   remaining_time?: number;
+
+  /** When all players pass, this is set to the last passer's player_id
+   *  so the client can still announce "过" even though player_last_actions
+   *  is cleared for UI cleanliness. */
+  all_pass_last_player?: string | null;
+
+  /** Server-driven announcement sound path.
+   *  e.g. "dad/single_KING", "mom/pass", "sister/declare_yes"
+   *  Client plays this directly — no pattern detection needed. */
+  announcement_sound?: string;
+
+  /** Reconnection token. Store in localStorage, pass as ?token= on reconnect. */
+  reconnect_token?: string;
+
+  /** Player IDs currently in auto-play (托管) mode. */
+  auto_play_players?: string[];
 }
 
 // ---------------------------------------------------------------------------

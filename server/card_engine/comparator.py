@@ -53,19 +53,19 @@ def can_beat(
     Returns:
         True if `play` beats `last_play`, False otherwise.
     """
-    # ── Rule 1: ACE_BOMB beats everything ──────────────────────────
+    # ── Rule 1: ACE_BOMB only beats bombs (not non-bomb patterns) ──
     if play.type == PatternType.ACE_BOMB:
-        return True
+        return last_play.type in (PatternType.BOMB, PatternType.ACE_BOMB)
 
     # ── Rule 2: Nothing beats ACE_BOMB ─────────────────────────────
     if last_play.type == PatternType.ACE_BOMB:
         return False
 
-    # ── Rule 3: BOMB vs non-bomb ───────────────────────────────────
+    # ── Rule 3: BOMB beats any non-bomb pattern ────────────────────
     if play.type == PatternType.BOMB and last_play.type != PatternType.BOMB:
         return True
 
-    # ── Rule 4: Non-bomb vs BOMB ───────────────────────────────────
+    # ── Rule 4: Non-bomb cannot beat BOMB ──────────────────────────
     if last_play.type == PatternType.BOMB and play.type != PatternType.BOMB:
         return False
 

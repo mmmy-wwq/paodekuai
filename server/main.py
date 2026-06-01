@@ -86,9 +86,13 @@ async def websocket_endpoint(
     name: str = Query(default="Player"),
     players: int = Query(default=4, ge=2, le=4),
     pid: str = Query(default=""),
+    token: str = Query(default=""),
 ):
     """WebSocket game endpoint."""
-    player_id = await game_server.handle_connection(websocket, room_id, name, player_count=players, reconnect_id=pid)
+    player_id = await game_server.handle_connection(
+        websocket, room_id, name,
+        player_count=players, reconnect_id=pid, reconnect_token=token,
+    )
     if player_id is None:
         return
     try:
@@ -97,6 +101,25 @@ async def websocket_endpoint(
             await game_server.handle_message(websocket, player_id, raw_data)
     except WebSocketDisconnect:
         await game_server.handle_disconnect(websocket)
+
+
+# ── Admin: reset all games ────────────────────────────────────────────────────
+
+
+@app.post("/api/admin/reset")
+async def api_admin_reset():
+    """End all games, kick all players, clear all rooms.
+    Call this when players get stuck in "正在连接服务器中".
+    """
+    global game_server
+    result = await game_server.reset_all()
+    # Re-initialize (fresh state)
+    game_server = GameServer()
+    return {
+        "success": True,
+        "message": "All games ended, all rooms cleared.",
+        **result,
+    }
 
 
 # ── Debug endpoint ───────────────────────────────────────────────────────────

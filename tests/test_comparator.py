@@ -184,8 +184,8 @@ class TestCanBeatBomb:
 class TestCanBeatAceBomb:
     """Tests for ACE_BOMB supremacy rules."""
 
-    def test_ace_bomb_beats_everything(self, ace_bomb):
-        """ACE_BOMB beats any pattern, including regular BOMB."""
+    def test_ace_bomb_beats_bomb(self, ace_bomb):
+        """ACE_BOMB beats a regular BOMB (but NOT non-bomb patterns)."""
         play = identify(ace_bomb, player_count=3)
         last = identify([
             c("TWO", "SPADE"), c("TWO", "HEART"),
@@ -204,6 +204,46 @@ class TestCanBeatAceBomb:
         ])
         assert play and last
         assert not can_beat(play, last)
+
+    # ── Bug regression: ACE_BOMB should NOT beat non-bomb patterns ──
+
+    def test_ace_bomb_cannot_beat_straight(self, ace_bomb):
+        """ACE_BOMB CANNOT beat a straight (only beats bombs)."""
+        play = identify(ace_bomb, player_count=3)
+        last = identify([
+            c("THREE", "SPADE"), c("FOUR", "HEART"), c("FIVE", "CLUB"),
+            c("SIX", "DIAMOND"), c("SEVEN", "SPADE"),
+        ])  # a straight
+        assert play and last
+        assert not can_beat(play, last), "A炸不能压顺子"
+
+    def test_ace_bomb_cannot_beat_single(self, ace_bomb):
+        """ACE_BOMB CANNOT beat a single card."""
+        play = identify(ace_bomb, player_count=3)
+        last = identify([c("THREE", "SPADE")])
+        assert play and last
+        assert not can_beat(play, last), "A炸不能压单张"
+
+    def test_ace_bomb_cannot_beat_triple_with_two(self, ace_bomb):
+        """ACE_BOMB CANNOT beat a triple_with_two."""
+        play = identify(ace_bomb, player_count=3)
+        last = identify([
+            c("THREE", "SPADE"), c("THREE", "HEART"), c("THREE", "CLUB"),
+            c("FOUR", "DIAMOND"), c("FIVE", "SPADE"),
+        ])
+        assert play and last
+        assert last.type == PatternType.TRIPLE_WITH_TWO
+        assert not can_beat(play, last), "A炸不能压三带二"
+
+    def test_ace_bomb_still_beats_bomb(self, ace_bomb):
+        """ACE_BOMB still beats regular bombs."""
+        play = identify(ace_bomb, player_count=3)
+        last = identify([
+            c("FIVE", "SPADE"), c("FIVE", "HEART"),
+            c("FIVE", "CLUB"), c("FIVE", "DIAMOND"),
+        ])
+        assert play and last
+        assert can_beat(play, last), "A炸应能压炸弹"
 
 
 # ═══════════════════════════════════════════════════════════════════════
